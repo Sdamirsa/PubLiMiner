@@ -1,0 +1,24 @@
+general:
+  output_dir: output
+  log_level: INFO
+  seed: 42
+  on_error: skip
+  max_error_rate: 0.05
+
+cache:
+  ttl_days: 90
+
+steps:
+  - fetch
+  - parse
+  - deduplicate
+  - embed
+  - reduce
+  - cluster
+  - sample
+  - extract
+  - score
+  - trend
+  - rag
+  - patent
+  - export

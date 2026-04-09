@@ -1,0 +1,12 @@
+query: ""
+start_date: ""
+end_date: ""
+email: ""
+api_key: ""
+max_results: 0
+batch_size: 500
+retry_attempts: 3
+rate_limit_per_second: 3.0
+download_mode: full
+ret_mode: xml
+ret_type: ""

@@ -1,0 +1,57 @@
+general:
+  output_dir: main
+  log_level: INFO
+  on_error: fail # fail or skip
+  max_error_rate: 0.05
+  seed: 42
+cache:
+  ttl_days: 90
+steps:
+- fetch
+- parse
+- deduplicate
+fetch:
+  query: "(\n  \"artificial intelligence\"[Title/Abstract] OR\n  \"machine learning\"\
+    [Title/Abstract] OR\n  \"deep learning\"[Title/Abstract] OR\n  \"neural network\"\
+    [Title/Abstract] OR\n  \"neural networks\"[Title/Abstract] OR\n  \"convolutional\
+    \ neural\"[Title/Abstract] OR\n  \"recurrent neural\"[Title/Abstract] OR\n  \"\
+    transformer model\"[Title/Abstract] OR\n  \"transformer architecture\"[Title/Abstract]\
+    \ OR\n  \"large language model\"[Title/Abstract] OR\n  \"large language models\"\
+    [Title/Abstract] OR\n  \"foundation model\"[Title/Abstract] OR\n  \"natural language\
+    \ processing\"[Title/Abstract] OR\n  \"computer vision\"[Title/Abstract] OR\n\
+    \  \"reinforcement learning\"[Title/Abstract] OR\n  \"supervised learning\"[Title/Abstract]\
+    \ OR\n  \"unsupervised learning\"[Title/Abstract] OR\n  \"self-supervised learning\"\
+    [Title/Abstract] OR\n  \"transfer learning\"[Title/Abstract] OR\n  \"federated\
+    \ learning\"[Title/Abstract] OR\n  \"generative adversarial\"[Title/Abstract]\
+    \ OR\n  \"random forest\"[Title/Abstract] OR\n  \"support vector machine\"[Title/Abstract]\
+    \ OR\n  \"gradient boosting\"[Title/Abstract] OR\n  \"xgboost\"[Title/Abstract]\
+    \ OR\n  \"lightgbm\"[Title/Abstract] OR\n  \"predictive model\"[Title/Abstract]\
+    \ OR\n  \"predictive modeling\"[Title/Abstract] OR\n  \"ChatGPT\"[Title/Abstract]\
+    \ OR\n  \"GPT-4\"[Title/Abstract] OR\n  \"GPT-3\"[Title/Abstract] OR\n  \"BERT\"\
+    [Title/Abstract] OR\n  \"diffusion model\"[Title/Abstract] OR\n  \"Artificial\
+    \ Intelligence\"[MeSH] OR\n  \"Machine Learning\"[MeSH] OR\n  \"Deep Learning\"\
+    [MeSH] OR\n  \"Neural Networks, Computer\"[MeSH] OR\n  \"Natural Language Processing\"\
+    [MeSH] OR\n  \"Supervised Machine Learning\"[MeSH] OR\n  \"Unsupervised Machine\
+    \ Learning\"[MeSH]\n)\n"
+  start_date: 2000/01/01 # change to 'auto' after first run to avoid running the monthly search again
+  end_date: ''
+  email: ''                   # read from PUBMED_EMAIL env var (.env)
+  api_key: ''                 # read from NCBI_API_KEY env var (.env)
+  max_results: 0
+  batch_size: 500
+  retry_attempts: 3
+  rate_limit_per_second: 3.0
+  download_mode: full
+  ret_mode: xml
+  ret_type: ''
+parse:
+  min_abstract_length: 0
+  language_filter: ''
+  remove_html: true
+  prepare_llm_input: true
+  flag_exclusions: false
+deduplicate:
+  check_doi: true
+  check_title_fuzzy: true
+  fuzzy_threshold: 90
+  remove_retracted: true

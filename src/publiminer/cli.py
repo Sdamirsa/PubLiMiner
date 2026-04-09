@@ -1,0 +1,160 @@
+"""Typer-based CLI for PubLiMiner."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Optional
+
+import typer
+from rich.console import Console
+from rich.table import Table
+
+from publiminer.utils.env import load_env
+
+# Auto-load .env so NCBI_API_KEY / PUBMED_EMAIL work without manual export
+load_env()
+
+app = typer.Typer(name="publiminer", help="PubLiMiner — Publication Literature Miner")
+console = Console()
+
+
+@app.command()
+def run(
+    config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to publiminer.yaml"),
+    output_dir: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory"),
+    steps: Optional[str] = typer.Option(None, "--steps", "-s", help="Comma-separated step list"),
+) -> None:
+    """Run the pipeline (or specific steps)."""
+    from publiminer.core.config import load_config, load_step_config
+    from publiminer.core.global_schema import GlobalConfig
+    from publiminer.utils.logger import setup_logger
+
+    overrides = {}
+    if output_dir:
+        overrides["general"] = {"output_dir": output_dir}
+    if steps:
+        overrides["steps"] = [s.strip() for s in steps.split(",")]
+
+    global_cfg = load_config(user_config_path=config, overrides=overrides or None)
+    setup_logger(level=global_cfg.general.log_level, log_dir=Path(global_cfg.general.output_dir) / "logs")
+
+    out = output_dir or global_cfg.general.output_dir
+
+    for step_name in global_cfg.steps:
+        console.print(f"[bold blue]Running step:[/bold blue] {step_name}")
+        try:
+            step_instance = _create_step(step_name, global_cfg, config, out)
+            meta = step_instance.execute()
+            console.print(f"  [green]✓[/green] {meta.status} ({meta.duration_seconds}s)")
+        except Exception as e:
+            console.print(f"  [red]✗[/red] {e}")
+            if global_cfg.general.on_error == "fail":
+                raise typer.Exit(1)
+
+
+@app.command()
+def inspect(
+    step: str = typer.Argument(..., help="Step name to inspect"),
+    output_dir: str = typer.Option("output", "--output", "-o", help="Output directory"),
+) -> None:
+    """Inspect a step's output and metadata."""
+    from publiminer.core.io import load_step_meta
+    from publiminer.core.spine import Spine
+
+    meta = load_step_meta(step, output_dir)
+    if meta:
+        table = Table(title=f"Step: {step}")
+        table.add_column("Field", style="cyan")
+        table.add_column("Value")
+        table.add_row("Status", meta.status)
+        table.add_row("Started", meta.started_at)
+        table.add_row("Duration", f"{meta.duration_seconds}s")
+        table.add_row("Rows before", str(meta.rows_before))
+        table.add_row("Rows after", str(meta.rows_after))
+        table.add_row("Errors", str(meta.errors))
+        console.print(table)
+    else:
+        console.print(f"[yellow]No metadata found for step: {step}[/yellow]")
+
+    spine = Spine(output_dir)
+    if spine.exists:
+        info = spine.inspect()
+        console.print(f"\n[bold]Parquet:[/bold] {info['rows']} rows, {info['file_size_mb']} MB")
+        console.print(f"[bold]Columns:[/bold] {', '.join(info['columns'])}")
+
+
+@app.command()
+def status(
+    output_dir: str = typer.Option("output", "--output", "-o", help="Output directory"),
+) -> None:
+    """Show pipeline status dashboard."""
+    from publiminer.core.spine import Spine
+
+    spine = Spine(output_dir)
+    if not spine.exists:
+        console.print("[yellow]No data found. Run the pipeline first.[/yellow]")
+        return
+
+    info = spine.inspect()
+    console.print(f"[bold]Total papers:[/bold] {info['rows']}")
+    console.print(f"[bold]File size:[/bold] {info['file_size_mb']} MB")
+    console.print(f"[bold]Columns:[/bold] {len(info['columns'])}")
+
+    table = Table(title="Column Schema")
+    table.add_column("Column", style="cyan")
+    table.add_column("Type")
+    for col, dtype in info["schema"].items():
+        table.add_row(col, dtype)
+    console.print(table)
+
+
+@app.command()
+def import_legacy(
+    source_dir: str = typer.Argument(..., help="Directory with pubmed_batch_*.json files"),
+    output_dir: str = typer.Option("output", "--output", "-o", help="Output directory"),
+    max_files: Optional[int] = typer.Option(None, "--max-files", help="Max files to import"),
+) -> None:
+    """Import legacy AI-in-Med-Trend batch files into PubLiMiner format."""
+    from publiminer.utils.legacy_import import import_legacy_data
+    from publiminer.utils.logger import setup_logger
+
+    setup_logger(level="INFO")
+    console.print(f"[bold]Importing from:[/bold] {source_dir}")
+    console.print(f"[bold]Output to:[/bold] {output_dir}")
+
+    result = import_legacy_data(source_dir, output_dir, max_files)
+
+    console.print(f"\n[green]Import complete![/green]")
+    console.print(f"  Files processed: {result['files']}")
+    console.print(f"  Total articles: {result['articles']}")
+    console.print(f"  Duplicates skipped: {result['duplicates']}")
+
+
+def _create_step(step_name: str, global_cfg: object, config_path: str | None, output_dir: str) -> object:
+    """Create a step instance by name."""
+    from publiminer.core.config import load_step_config
+
+    if step_name == "fetch":
+        from publiminer.steps.fetch.schema import FetchConfig
+        from publiminer.steps.fetch.step import FetchStep
+        step_cfg = load_step_config(step_name, FetchConfig, global_cfg, config_path)
+        return FetchStep(global_cfg, step_cfg, output_dir)
+
+    elif step_name == "parse":
+        from publiminer.steps.parse.schema import ParseConfig
+        from publiminer.steps.parse.step import ParseStep
+        step_cfg = load_step_config(step_name, ParseConfig, global_cfg, config_path)
+        return ParseStep(global_cfg, step_cfg, output_dir)
+
+    elif step_name == "deduplicate":
+        from publiminer.steps.deduplicate.schema import DeduplicateConfig
+        from publiminer.steps.deduplicate.step import DeduplicateStep
+        step_cfg = load_step_config(step_name, DeduplicateConfig, global_cfg, config_path)
+        return DeduplicateStep(global_cfg, step_cfg, output_dir)
+
+    else:
+        raise typer.BadParameter(f"Step '{step_name}' is not yet implemented")
+
+
+if __name__ == "__main__":
+    app()

@@ -1,0 +1,4 @@
+check_doi: true
+check_title_fuzzy: true
+fuzzy_threshold: 90
+remove_retracted: true
