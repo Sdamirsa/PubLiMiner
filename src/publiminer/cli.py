@@ -19,6 +19,43 @@ console = Console()
 
 
 @app.command()
+def ui(
+    port: int = typer.Option(8501, "--port", "-p", help="Port for the Streamlit server"),
+    host: str = typer.Option("localhost", "--host", "-h", help="Host address to bind"),
+) -> None:
+    """Launch the bundled Streamlit configuration + runner UI."""
+    import importlib.resources
+    import subprocess
+    import sys
+
+    try:
+        import streamlit  # noqa: F401
+    except ImportError:
+        console.print(
+            "[red]Streamlit not installed.[/red] Run: "
+            "[bold]pip install 'publiminer[ui]'[/bold]"
+        )
+        raise typer.Exit(1) from None
+
+    app_path = importlib.resources.files("publiminer.ui") / "app.py"
+    console.print(f"[bold green]Launching PubLiMiner UI[/bold green] at http://{host}:{port}")
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            str(app_path),
+            "--server.port",
+            str(port),
+            "--server.address",
+            host,
+        ],
+        check=False,
+    )
+
+
+@app.command()
 def run(
     config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to publiminer.yaml"),
     output_dir: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory"),

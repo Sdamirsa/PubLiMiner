@@ -70,6 +70,22 @@ publiminer = "publiminer.cli:app"
 [tool.hatch.build.targets.wheel]
 packages = ["src/publiminer"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"publiminer.yaml" = "publiminer/examples/publiminer.yaml"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/publiminer",
+    "tests",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "CITATION.cff",
+    ".zenodo.json",
+    "publiminer.yaml",
+    "pyproject.toml",
+]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100

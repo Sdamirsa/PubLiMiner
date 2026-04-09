@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use PubLiMiner, please cite it as below."
+title: "PubLiMiner: Streaming PubMed literature mining with LLM extraction"
+type: software
+authors:
+  - family-names: Safavi-Naini
+    given-names: Seyed Amir Ahmad
+repository-code: "https://github.com/sdamirsa/PubLiMiner"
+url: "https://github.com/sdamirsa/PubLiMiner"
+license: MIT
+version: 0.1.0
+date-released: 2026-04-09
+keywords:
+  - pubmed
+  - literature-mining
+  - nlp
+  - llm
+  - bioinformatics

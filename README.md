@@ -2,9 +2,11 @@
 
 > Publication Literature Miner — fetch, parse, deduplicate, embed, cluster, and extract structured data from PubMed at scale.
 
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![PyPI](https://img.shields.io/pypi/v/publiminer.svg)](https://pypi.org/project/publiminer/)
+[![Python](https://img.shields.io/pypi/pyversions/publiminer.svg)](https://pypi.org/project/publiminer/)
+[![CI](https://github.com/sdamirsa/PubLiMiner/actions/workflows/ci.yml/badge.svg)](https://github.com/sdamirsa/PubLiMiner/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-alpha-orange)]()
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
 
 PubLiMiner is a modular Python pipeline for mining biomedical literature from PubMed. It is designed for **200K+ paper corpora** with monthly incremental updates, a single Parquet file as the source of truth, and pluggable steps for embedding, clustering, and LLM-based structured extraction.
 
@@ -35,11 +37,33 @@ Currently implemented: **fetch**, **parse**, **deduplicate**. The remaining step
 Requires **Python 3.11+**.
 
 ```bash
+pip install publiminer              # core CLI + Python API
+pip install "publiminer[ui]"        # + Streamlit UI
+pip install "publiminer[all]"       # everything (UI + viz + rag + dev)
+```
+
+After install, launch the UI with a single command:
+
+```bash
+publiminer ui
+```
+
+Or use the Python API directly in a notebook/script:
+
+```python
+from publiminer import FetchStep, ParseStep, DeduplicateStep, Spine, GlobalConfig
+
+cfg = GlobalConfig()  # loads defaults; override via publiminer.yaml or kwargs
+spine = Spine("output")
+print(spine.count(), "papers currently in spine")
+```
+
+### Installing from source (for contributors)
+
+```bash
 git clone https://github.com/sdamirsa/PubLiMiner.git
 cd PubLiMiner
-pip install -e ".[ui]"          # core + Streamlit UI
-# or
-pip install -e ".[all]"         # core + UI + viz + rag + dev tools
+uv sync --all-extras    # or: pip install -e ".[all]"
 ```
 
 ## Quick start

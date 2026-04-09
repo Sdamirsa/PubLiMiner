@@ -1,0 +1,21 @@
+{
+  "title": "PubLiMiner: Streaming PubMed literature mining with LLM extraction",
+  "description": "Python library for large-scale PubMed mining: streaming fetch, incremental parse, fuzzy deduplication, embedding-based clustering, and LLM structured-output extraction. Scales to 300k+ papers on a laptop, with resumable nightly updates.",
+  "creators": [
+    {
+      "name": "Safavi-Naini, Seyed Amir Ahmad",
+      "affiliation": ""
+    }
+  ],
+  "keywords": [
+    "pubmed",
+    "literature-mining",
+    "nlp",
+    "llm",
+    "bioinformatics",
+    "clustering"
+  ],
+  "license": "MIT",
+  "upload_type": "software",
+  "access_right": "open"
+}
