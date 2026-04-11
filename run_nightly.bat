@@ -15,7 +15,7 @@ echo [%date% %time%] Starting PubLiMiner nightly run >> nightly.log
 echo ================================================================ >> nightly.log
 echo [%date% %time%] Starting PubLiMiner nightly run
 
-powershell -NoProfile -Command "$OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; py -3.11 -u -m publiminer.cli run --config publiminer.yaml 2>&1 | ForEach-Object { $_; Add-Content -Path nightly.log -Value $_ -Encoding utf8 }"
+powershell -NoProfile -Command "$OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; uv run publiminer run --config publiminer.yaml 2>&1 | ForEach-Object { $_; Add-Content -Path nightly.log -Value $_ -Encoding utf8 }"
 
 echo [%date% %time%] Done (exit %errorlevel%)
 echo [%date% %time%] Done (exit %errorlevel%) >> nightly.log
