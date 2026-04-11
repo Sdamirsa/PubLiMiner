@@ -119,6 +119,22 @@ class FetchStep(StepBase):
         start_date = self._resolve_start_date()
         end_date = self.config.end_date or datetime.now().strftime("%Y/%m/%d")
 
+        # Validate date ordering
+        if start_date and end_date:
+            try:
+                dt_s = datetime.strptime(start_date, "%Y/%m/%d")
+                dt_e = datetime.strptime(end_date, "%Y/%m/%d")
+                if dt_e < dt_s:
+                    raise StepError(
+                        self.name,
+                        f"end_date ({end_date}) is before start_date ({start_date})",
+                    )
+            except ValueError as exc:
+                raise StepError(
+                    self.name,
+                    f"Invalid date format (expected YYYY/MM/DD): {exc}",
+                ) from exc
+
         try:
             if start_date and end_date:
                 # Phase 1: plan (count every month, build optimized queries).

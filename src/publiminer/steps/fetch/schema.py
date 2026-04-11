@@ -22,6 +22,7 @@ class FetchConfig(BaseModel):
     @classmethod
     def _coerce_none(cls, v: object) -> str:
         return _none_to_empty(v)
+
     max_results: int = 0  # 0 = no limit
     batch_size: int = 500
     retry_attempts: int = 3

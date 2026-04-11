@@ -118,7 +118,7 @@ class DeduplicateStep(StepBase):
             with ProgressReporter("dedup_retracted", total=1,
                                   desc="Layer 4/4: Retracted") as p:
                 retracted_mask = (
-                    pl.col("publication_status").str.to_lowercase().str.contains("retract")
+                    pl.col("publication_status").str.to_lowercase().str.contains(r"\bretracted?\b")
                 )
                 retracted = df.filter(retracted_mask)
                 p.advance()
