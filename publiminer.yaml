@@ -33,7 +33,7 @@ fetch:
     [MeSH] OR\n  \"Neural Networks, Computer\"[MeSH] OR\n  \"Natural Language Processing\"\
     [MeSH] OR\n  \"Supervised Machine Learning\"[MeSH] OR\n  \"Unsupervised Machine\
     \ Learning\"[MeSH]\n)\n"
-  start_date: 2000/01/01 # change to 'auto' after first run to avoid running the monthly search again
+  start_date: '2000/01/01' #2000/01/01 # change to 'auto' after first run to avoid running the monthly search again
   end_date: ''
   email: ''                   # read from PUBMED_EMAIL env var (.env)
   api_key: ''                 # read from NCBI_API_KEY env var (.env)
