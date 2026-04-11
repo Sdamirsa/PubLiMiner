@@ -32,6 +32,47 @@ fetch → parse → deduplicate → embed → reduce (optional)
 
 Currently implemented: **fetch**, **parse**, **deduplicate**. The remaining steps are scaffolded in the architecture and being added incrementally.
 
+## Architecture
+
+> Full architecture diagrams: [`docs/architecture.md`](docs/architecture.md)
+
+```mermaid
+graph TB
+    subgraph User Interface
+        CLI["CLI: publiminer run/status/inspect/ui"]
+        UI["Streamlit UI: publiminer ui"]
+    end
+
+    subgraph Pipeline
+        FETCH["FetchStep<br/>PubMed API → raw XML"]
+        PARSE["ParseStep<br/>XML → structured fields"]
+        DEDUP["DeduplicateStep<br/>4-layer dedup"]
+    end
+
+    subgraph Data Layer
+        SPINE["Spine"]
+        PARQUET["papers.parquet<br/>(source of truth)"]
+        STAGING["papers.parquet.staging<br/>(crash checkpoint)"]
+        CACHE["SQLite cache<br/>(raw API responses)"]
+    end
+
+    CLI --> FETCH --> PARSE --> DEDUP
+    UI --> CLI
+    FETCH --> SPINE
+    PARSE --> SPINE
+    DEDUP --> SPINE
+    SPINE --> PARQUET
+    SPINE --> STAGING
+    FETCH --> CACHE
+```
+
+**Key design decisions:**
+- **Single Parquet file** is the source of truth — every step reads columns, adds columns, writes back
+- **Staging checkpoint** makes fetch crash-safe — resume from where you left off
+- **Incremental parse** — only processes rows where `title IS NULL`
+- **Memory-bounded** — fetch streams in 5 MB batches, merge uses pyarrow row groups (~50 MB cap)
+- **Binary bisection + PMID-list fallback** — handles PubMed's 10k pagination limit automatically
+
 ## Installation
 
 Requires **Python 3.11+**.

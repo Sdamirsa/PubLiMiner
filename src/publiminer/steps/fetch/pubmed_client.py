@@ -181,6 +181,121 @@ class PubMedClient:
         logger.debug(f"Search returned {count} results")
         return web_env, query_key, count
 
+    def search_pmids(self, query: str) -> list[str]:
+        """Search PubMed and return ALL matching PMIDs (no 10k ceiling).
+
+        Strategy: esearch with ``usehistory=y`` creates a server-side result
+        set, then we page through it with ``retstart`` to collect every PMID.
+        The history server has no 10k cap on *ID retrieval* (only efetch has
+        that limit for full records).  We page in chunks of 9,999 IDs.
+
+        Args:
+            query: Search query string.
+
+        Returns:
+            List of PMID strings.
+        """
+        encoded_query = urllib.parse.quote_plus(query)
+
+        # Step 1: create a history-server session and get total count + first page
+        page_size = 9_999
+        url = (
+            f"{PUBMED_BASE_URL}esearch.fcgi?{self._build_base_params()}"
+            f"&term={encoded_query}&usehistory=y&retmax={page_size}"
+        )
+        content = self._get(url)
+
+        count_match = re.search(r"<Count>(\d+)</Count>", content)
+        web_env_match = re.search(r"<WebEnv>(\S+)</WebEnv>", content)
+        query_key_match = re.search(r"<QueryKey>(\d+)</QueryKey>", content)
+        if not count_match:
+            raise APIError("pubmed", "Failed to parse esearch count response")
+        total = int(count_match.group(1))
+
+        if total == 0:
+            return []
+
+        # Collect first page of PMIDs
+        all_pmids: list[str] = re.findall(r"<Id>(\d+)</Id>", content)
+        logger.debug(f"search_pmids: page 0 → {len(all_pmids)} PMIDs")
+
+        if total <= page_size or not web_env_match or not query_key_match:
+            logger.info(
+                f"search_pmids: collected {len(all_pmids):,} PMIDs "
+                f"(expected {total:,})"
+            )
+            return all_pmids
+
+        # Step 2: page through remaining IDs using the WebEnv session
+        web_env = web_env_match.group(1)
+        query_key = query_key_match.group(1)
+
+        for retstart in range(page_size, total, page_size):
+            retmax = min(page_size, total - retstart)
+            page_url = (
+                f"{PUBMED_BASE_URL}esearch.fcgi?{self._build_base_params()}"
+                f"&query_key={query_key}&WebEnv={web_env}"
+                f"&retstart={retstart}&retmax={retmax}"
+            )
+            page_content = self._get(page_url)
+            pmids = re.findall(r"<Id>(\d+)</Id>", page_content)
+            all_pmids.extend(pmids)
+            logger.debug(
+                f"search_pmids: page {retstart} → {len(pmids)} PMIDs "
+                f"(total so far: {len(all_pmids):,})"
+            )
+
+        logger.info(
+            f"search_pmids: collected {len(all_pmids):,} PMIDs "
+            f"(expected {total:,})"
+        )
+        return all_pmids
+
+    def fetch_by_pmids(
+        self,
+        pmids: list[str],
+        download_mode: str = "full",
+        ret_mode: str = "xml",
+        ret_type: str = "",
+    ) -> str:
+        """Fetch articles by explicit PMID list (bypasses WebEnv pagination limit).
+
+        Args:
+            pmids: List of PMID strings (max ~200 per call recommended).
+            download_mode: 'full' (efetch) or 'summary' (esummary).
+            ret_mode: Return mode.
+            ret_type: Return type.
+
+        Returns:
+            Response XML text.
+        """
+        ret_mode, ret_type = self.validate_return_format(ret_mode, ret_type)
+        endpoint = "esummary.fcgi" if download_mode == "summary" else "efetch.fcgi"
+
+        id_str = ",".join(pmids)
+        url = (
+            f"{PUBMED_BASE_URL}{endpoint}?{self._build_base_params()}"
+            f"&id={id_str}"
+        )
+        if ret_mode:
+            url += f"&retmode={ret_mode}"
+        if ret_type:
+            url += f"&rettype={ret_type}"
+
+        # Check cache
+        cache_key = f"efetch:pmidlist:{hashlib.md5(id_str.encode()).hexdigest()}"
+        if self.cache:
+            cached = self.cache.get("pubmed", cache_key)
+            if cached is not None:
+                return cached
+
+        result = self._get(url)
+
+        if self.cache:
+            self.cache.put("pubmed", cache_key, result)
+
+        return result
+
     def fetch_batch(
         self,
         web_env: str,
@@ -400,6 +515,9 @@ class PubMedClient:
         )
         return optimized, total
 
+    # PubMed WebEnv hard limit: retstart + retmax must stay under this.
+    WEBENV_LIMIT = 9999
+
     def iter_planned(
         self,
         optimized: list[dict[str, Any]],
@@ -408,13 +526,47 @@ class PubMedClient:
         ret_mode: str = "xml",
         ret_type: str = "",
     ) -> Iterator[dict[str, Any]]:
-        """Stream batches from a pre-computed plan (from plan_date_batched)."""
+        """Stream batches from a pre-computed plan (from plan_date_batched).
+
+        If any optimized query exceeds the PubMed WebEnv pagination limit
+        (10,000 results), it is automatically split into smaller date ranges
+        via binary bisection until each sub-range fits.
+        """
         for query_info in optimized:
-            query = query_info["query"]
-            batch_id = query_info["batch_id"]
-            web_env, query_key, actual_count = self.search(query)
-            if actual_count == 0:
-                continue
+            yield from self._iter_query_with_subdivision(
+                query_info=query_info,
+                batch_size=batch_size,
+                download_mode=download_mode,
+                ret_mode=ret_mode,
+                ret_type=ret_type,
+            )
+
+    def _iter_query_with_subdivision(
+        self,
+        query_info: dict[str, Any],
+        batch_size: int,
+        download_mode: str,
+        ret_mode: str,
+        ret_type: str,
+        depth: int = 0,
+    ) -> Iterator[dict[str, Any]]:
+        """Fetch a single optimized query, splitting its date range if it exceeds the limit.
+
+        Uses binary bisection on the date range: if a query returns >9,999 results,
+        split the date window in half and recurse on each half.  This guarantees
+        every sub-query stays within PubMed's pagination ceiling.
+        """
+        query = query_info["query"]
+        batch_id = query_info["batch_id"]
+        start_date = query_info.get("start_date", "")
+        end_date = query_info.get("end_date", "")
+
+        web_env, query_key, actual_count = self.search(query)
+        if actual_count == 0:
+            return
+
+        if actual_count <= self.WEBENV_LIMIT:
+            # Normal pagination — fits within the limit.
             num_sub_batches = (actual_count + batch_size - 1) // batch_size
             for i in range(num_sub_batches):
                 retstart = i * batch_size
@@ -433,6 +585,115 @@ class PubMedClient:
                     "timestamp": datetime.now().isoformat(),
                     "data": data,
                 }
+            return
+
+        # --- Too many results: split the date range in half and recurse ---
+        if not start_date or not end_date:
+            logger.error(
+                f"Query returned {actual_count:,} results (> {self.WEBENV_LIMIT:,}) "
+                f"but has no date range to split — skipping."
+            )
+            return
+
+        dt_start = datetime.strptime(start_date, "%Y/%m/%d")
+        dt_end = datetime.strptime(end_date, "%Y/%m/%d")
+
+        if dt_start >= dt_end:
+            # Single day with >9,999 results — fall back to PMID-list fetching.
+            logger.info(
+                f"Single-day range {start_date} has {actual_count:,} results — "
+                f"falling back to PMID-list fetch."
+            )
+            yield from self._iter_by_pmid_list(
+                query=query,
+                batch_id=batch_id,
+                batch_size=batch_size,
+                download_mode=download_mode,
+                ret_mode=ret_mode,
+                ret_type=ret_type,
+            )
+            return
+
+        mid = dt_start + (dt_end - dt_start) // 2
+        mid_str = mid.strftime("%Y/%m/%d")
+        next_day_str = (mid + timedelta(days=1)).strftime("%Y/%m/%d")
+
+        logger.info(
+            f"Splitting oversized query ({actual_count:,} results, depth={depth}): "
+            f"{start_date}–{end_date} → {start_date}–{mid_str} + {next_day_str}–{end_date}"
+        )
+
+        # Extract the base query (everything before the date filter).
+        base_query = query_info.get("_base_query", "")
+        if not base_query:
+            # Reconstruct: query is "(<base>) AND (<date_range>)"
+            date_range_str = query_info.get("date_range", "")
+            if date_range_str:
+                base_query = query.replace(f" AND ({date_range_str})", "")
+            else:
+                base_query = query
+
+        for sub_start, sub_end in [(start_date, mid_str), (next_day_str, end_date)]:
+            date_query = f'"{sub_start}"[Date - Publication] : "{sub_end}"[Date - Publication]'
+            sub_info = {
+                "query": f"{base_query} AND ({date_query})",
+                "count": 0,
+                "start_date": sub_start,
+                "end_date": sub_end,
+                "date_range": date_query,
+                "batch_id": f"{batch_id}_split{depth}",
+                "_base_query": base_query,
+            }
+            yield from self._iter_query_with_subdivision(
+                query_info=sub_info,
+                batch_size=batch_size,
+                download_mode=download_mode,
+                ret_mode=ret_mode,
+                ret_type=ret_type,
+                depth=depth + 1,
+            )
+
+    def _iter_by_pmid_list(
+        self,
+        query: str,
+        batch_id: str | int,
+        batch_size: int,
+        download_mode: str,
+        ret_mode: str,
+        ret_type: str,
+    ) -> Iterator[dict[str, Any]]:
+        """Fetch all articles for a query using explicit PMID lists.
+
+        This bypasses the WebEnv 10k pagination limit by:
+        1. Collecting all PMIDs via esearch (paginated, no 10k ceiling).
+        2. Fetching article XML in small batches using ``id=pmid1,pmid2,...``
+           (no WebEnv needed).
+
+        Used as a last-resort fallback for single-day queries with >9,999 results.
+        """
+        pmids = self.search_pmids(query)
+        if not pmids:
+            return
+
+        # Fetch in chunks (200 PMIDs per call to stay within URL length limits)
+        chunk_size = min(batch_size, 200)
+        for i in range(0, len(pmids), chunk_size):
+            chunk = pmids[i : i + chunk_size]
+            data = self.fetch_by_pmids(
+                chunk,
+                download_mode=download_mode,
+                ret_mode=ret_mode,
+                ret_type=ret_type,
+            )
+            yield {
+                "query": query,
+                "batch_id": f"{batch_id}_pmids_{i}",
+                "retstart": i,
+                "retmax": len(chunk),
+                "total_count": len(pmids),
+                "timestamp": datetime.now().isoformat(),
+                "data": data,
+            }
 
     def iter_date_batched(
         self,
