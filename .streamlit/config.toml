@@ -1,0 +1,17 @@
+# Streamlit configuration for the PubLiMiner UI.
+#
+# Why this file exists
+# --------------------
+# The Explore tab can return up to 10,000 rows × 21 columns per query and
+# offers an XLSX/JSON download of the result set. With ``raw_xml`` opted in,
+# a single download can exceed Streamlit's default 200 MB WebSocket message
+# cap, causing the download button to silently fail. Bumping
+# ``maxMessageSize`` to 500 MB covers the realistic worst case (10K rows
+# with raw_xml ≈ 150–400 MB depending on average XML length).
+#
+# All other defaults are appropriate — we don't accept uploads, don't run
+# untrusted third-party components, and the file watcher is useful during
+# development.
+
+[server]
+maxMessageSize = 500   # MB (default 200) — header+result downloads with raw_xml
