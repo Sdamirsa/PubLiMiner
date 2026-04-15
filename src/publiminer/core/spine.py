@@ -20,6 +20,17 @@ from publiminer.exceptions import SpineError
 
 STAGING_FILENAME = PARQUET_FILENAME + ".staging"
 
+# Parquet write defaults — applied consistently to every writer in this module.
+# Rationale: pyarrow.ParquetWriter defaults to snappy, which silently downgrades
+# the main parquet whenever merge_staging runs. Pin compression and row-group
+# size here so the file stays zstd and chunks are small enough for pyarrow
+# iter_batches to actually stream (row_group_size is a hard upper bound on
+# iter_batches' effective batch size).
+PARQUET_COMPRESSION = "zstd"
+PARQUET_COMPRESSION_LEVEL = 3
+PARQUET_ROW_GROUP_SIZE = 50_000   # ~500 MB decoded per group at ~10 KB/row raw_xml
+PARQUET_DATA_PAGE_SIZE = 1 << 20  # 1 MB pages (fat rows, mostly raw_xml)
+
 
 class Spine:
     """Parquet backbone for paper data.
@@ -46,7 +57,14 @@ class Spine:
         """
         if not self.staging_exists:
             tmp = self.staging_path.with_suffix(".staging.tmp")
-            df.write_parquet(tmp)
+            df.write_parquet(
+                tmp,
+                compression=PARQUET_COMPRESSION,
+                compression_level=PARQUET_COMPRESSION_LEVEL,
+                row_group_size=PARQUET_ROW_GROUP_SIZE,
+                data_page_size=PARQUET_DATA_PAGE_SIZE,
+                statistics=True,
+            )
             os.replace(tmp, self.staging_path)
             return
         existing = pl.read_parquet(self.staging_path, memory_map=False)
@@ -61,7 +79,14 @@ class Spine:
         df = df.select(all_columns)
         combined = pl.concat([existing, df], how="vertical_relaxed")
         tmp = self.staging_path.with_suffix(".staging.tmp")
-        combined.write_parquet(tmp)
+        combined.write_parquet(
+            tmp,
+            compression=PARQUET_COMPRESSION,
+            compression_level=PARQUET_COMPRESSION_LEVEL,
+            row_group_size=PARQUET_ROW_GROUP_SIZE,
+            data_page_size=PARQUET_DATA_PAGE_SIZE,
+            statistics=True,
+        )
         gc.collect()
         os.replace(tmp, self.staging_path)
 
@@ -99,7 +124,14 @@ class Spine:
         union_schema = pa.schema(list(seen.values()))
 
         tmp = self.parquet_path.with_suffix(".parquet.tmp")
-        writer = pq.ParquetWriter(tmp, union_schema)
+        writer = pq.ParquetWriter(
+            tmp,
+            union_schema,
+            compression=PARQUET_COMPRESSION,
+            compression_level=PARQUET_COMPRESSION_LEVEL,
+            write_statistics=True,
+            data_page_size=PARQUET_DATA_PAGE_SIZE,
+        )
 
         def _stream(pf: pq.ParquetFile) -> None:
             for i in range(pf.num_row_groups):
@@ -112,7 +144,7 @@ class Spine:
                             name, pa.nulls(len(tbl), type=field.type)
                         )
                 tbl = tbl.select(union_schema.names)
-                writer.write_table(tbl)
+                writer.write_table(tbl, row_group_size=PARQUET_ROW_GROUP_SIZE)
 
         try:
             _stream(main_pf)
@@ -150,15 +182,60 @@ class Spine:
 
         # Eager read with mmap disabled — on Windows, mmap'd reads block
         # subsequent writes to the same file (OSError 1224).
-        df = pl.read_parquet(self.parquet_path, memory_map=False)
         if columns:
-            valid_cols = [c for c in columns if c in df.columns]
+            # Project at read-time. Without this, polars would load the full
+            # schema (including raw_xml, ~90% of the file) even when the
+            # caller only wants a few thin columns. Tolerance preserved:
+            # requesting a non-existent column is dropped silently unless
+            # NONE of the requested columns exist.
+            schema_names = pq.ParquetFile(self.parquet_path).schema_arrow.names
+            valid_cols = [c for c in columns if c in schema_names]
             if not valid_cols:
                 raise SpineError(f"None of the requested columns exist: {columns}")
-            df = df.select(valid_cols)
+            df = pl.read_parquet(
+                self.parquet_path, memory_map=False, columns=valid_cols,
+            )
+        else:
+            df = pl.read_parquet(self.parquet_path, memory_map=False)
         if filter_expr is not None:
             df = df.filter(filter_expr)
         return df
+
+    def iter_batches(
+        self,
+        columns: list[str] | None = None,
+        batch_size: int = 10_000,
+    ):
+        """Stream the parquet in row batches (pyarrow RecordBatch).
+
+        Windows-safe: ``pyarrow.ParquetFile`` does not mmap by default.
+        Callers must release the iterator (or explicitly ``del pf``) before
+        any write to the same file, or ``os.replace`` will fail with
+        Access Denied.
+
+        Actual batch size is capped by the parquet row group size — so the
+        file must be written with ``PARQUET_ROW_GROUP_SIZE`` for streaming
+        to actually bound memory. A parquet with 120K-row groups will
+        yield ~120K-row batches regardless of the ``batch_size`` argument.
+
+        Args:
+            columns: Specific columns to project (None = all).
+            batch_size: Target row count per yielded batch.
+
+        Yields:
+            ``pyarrow.RecordBatch`` with the requested columns.
+        """
+        if not self.exists:
+            raise SpineError(f"Parquet file not found: {self.parquet_path}")
+        pf = pq.ParquetFile(self.parquet_path)
+        if columns:
+            available = set(pf.schema_arrow.names)
+            missing = [c for c in columns if c not in available]
+            if missing:
+                raise SpineError(f"Columns not in parquet: {missing}")
+        yield from pf.iter_batches(
+            batch_size=batch_size, columns=columns, use_threads=True,
+        )
 
     def write(self, df: pl.DataFrame) -> None:
         """Atomically write a DataFrame as the parquet file (full overwrite).
@@ -170,7 +247,14 @@ class Spine:
             df: DataFrame to write.
         """
         tmp_path = self.parquet_path.with_suffix(".parquet.tmp")
-        df.write_parquet(tmp_path)
+        df.write_parquet(
+            tmp_path,
+            compression=PARQUET_COMPRESSION,
+            compression_level=PARQUET_COMPRESSION_LEVEL,
+            row_group_size=PARQUET_ROW_GROUP_SIZE,
+            data_page_size=PARQUET_DATA_PAGE_SIZE,
+            statistics=True,
+        )
         # Force release of any lingering mmaps before replace
         gc.collect()
         os.replace(tmp_path, self.parquet_path)

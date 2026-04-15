@@ -208,7 +208,8 @@ PubLiMiner is designed to be re-run nightly without redoing any work:
 
 - **400K papers**: ~1.0–1.2 GB parquet, ~30–60 min total runtime with an NCBI API key
 - **PubMed WebEnv limit**: a single esearch+efetch session caps at 9,999 records — use date partitioning (`start_date` / `end_date`) for larger queries
-- **Memory**: parse loads all rows in RAM at once; for 400K with raw XML, allow ~4 GB peak
+- **Memory**: parse streams in 5K-row batches (~1.5 GB peak on a 500K-row corpus); dedup reads only the columns it needs per layer (~1 GB peak). The only step that loads the full parquet is the final `add_columns` write after parse, which spikes to ~3–5 GB transiently depending on corpus size
+- **Parquet format**: files are written with zstd-3 compression and 50K-row groups — required for `pyarrow.iter_batches` to actually stream. If you have a pre-v0.1.x parquet written with snappy and large row groups, run `uv run python scripts/migrate_parquet.py` once to re-chunk it
 - **Disk**: keep at least 2× your final parquet size free for atomic writes
 
 ## Development

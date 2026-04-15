@@ -212,6 +212,12 @@ output/
 output_*/
 *.parquet
 *.parquet.tmp
+# backup produced by scripts/migrate_parquet.py (5+ GB, not for git)
+*.parquet.bak
+# in-flight target of scripts/migrate_parquet.py
+*.parquet.migrated
+# crash checkpoint written by Spine.append_staging
+*.parquet.staging
 cache.db
 papers.db
 step_log/
