@@ -274,18 +274,37 @@ def run_wizard(cwd: Path | None = None, *, force: bool = False) -> None:
             "or re-running [bold]publiminer setup[/bold].[/dim]"
         )
 
-    # Commit everything.
+    # Commit credentials before asking about the YAML — credentials are
+    # independent of the config file decision.
     written = write_env(cwd, email=email, api_key=api_key)
     gi_changed = ensure_gitignored(cwd)
 
+    # Explain what publiminer.yaml is BEFORE asking whether to scaffold it.
+    # First-time users see the word "YAML" and don't know what it controls.
     yaml_scaffolded = None
     yaml_path = cwd / "publiminer.yaml"
-    if not yaml_path.exists() and typer.confirm(
-        "Create a starter publiminer.yaml with an example query?", default=True
-    ):
-        yaml_scaffolded = scaffold_yaml(cwd)
+    if not yaml_path.exists():
+        console.print()
+        console.print(
+            Panel(
+                "[bold]publiminer.yaml[/bold] is the pipeline's recipe file. It controls:\n\n"
+                "• [cyan]query[/cyan]       — what to search PubMed for\n"
+                "• [cyan]start_date / end_date[/cyan] — date range to fetch\n"
+                "• [cyan]steps[/cyan]       — which pipeline stages to run (fetch, parse, …)\n"
+                "• [cyan]parameters[/cyan]  — per-step settings "
+                "(fuzzy threshold, batch size, etc.)\n\n"
+                "The starter template ships with a small demo query\n"
+                "([dim]diabetes AND machine learning, 2024[/dim]) so you can see the\n"
+                "pipeline work end-to-end before writing your own query.\n\n"
+                "You'll edit it in the UI's Config tab or any text editor.",
+                title="📝 About publiminer.yaml",
+                border_style="blue",
+            )
+        )
+        if typer.confirm("Create a starter publiminer.yaml with this example query?", default=True):
+            yaml_scaffolded = scaffold_yaml(cwd)
 
-    # Summary.
+    # Saved-everything summary.
     console.print()
     console.print(
         Panel.fit(
@@ -296,17 +315,76 @@ def run_wizard(cwd: Path | None = None, *, force: bool = False) -> None:
                 else ""
             )
             + (
-                f"[green]✓[/green] Wrote starter [cyan]{yaml_scaffolded}[/cyan]\n"
+                f"[green]✓[/green] Wrote starter [cyan]{yaml_scaffolded}[/cyan]"
                 if yaml_scaffolded
-                else f"[dim]  publiminer.yaml already exists at {yaml_path}[/dim]\n"
+                else f"[dim]  publiminer.yaml already exists at {yaml_path}[/dim]"
                 if yaml_path.exists()
                 else ""
-            )
-            + "\n[bold]Next:[/bold]\n"
-            + "  • [cyan]publiminer ui[/cyan]       — visual editor + runner\n"
-            + "  • [cyan]publiminer run[/cyan]      — run the pipeline\n"
-            + "  • [cyan]publiminer status[/cyan]   — inspect your corpus",
+            ),
             title="🎉 All set",
             border_style="green",
         )
+    )
+
+    # How to actually use what we just set up.
+    console.print()
+    console.print(
+        Panel(
+            "The UI has [bold]four tabs[/bold] for everything you'll do:\n\n"
+            "  [cyan]⚙️  Configure[/cyan]  edit the query, dates, and pipeline steps\n"
+            "  [cyan]▶️  Run[/cyan]        execute the pipeline with a live progress bar\n"
+            "  [cyan]🔍 Explore[/cyan]    filter and sample papers once you have data\n"
+            "  [cyan]📊 Status[/cyan]     corpus size, schema, last-run metadata\n\n"
+            "[bold]Big corpora (>10k papers)?[/bold] Configure once in the UI, then run\n"
+            "in the background with [cyan]publiminer run[/cyan] (or schedule\n"
+            "[cyan]run_nightly.bat[/cyan] via Task Scheduler on Windows / cron on macOS/Linux).\n"
+            "Check on it any time with [cyan]publiminer status[/cyan].",
+            title="🧭 What to do next",
+            border_style="cyan",
+        )
+    )
+
+    # Offer to launch the UI right now — reduces the remaining steps to zero.
+    console.print()
+    if typer.confirm(
+        "Launch the UI now? (You can always run 'publiminer ui' later)",
+        default=True,
+    ):
+        _launch_ui(cwd)
+    else:
+        console.print()
+        console.print("Copy-paste any of these when you're ready:\n")
+        console.print("  [cyan]publiminer ui[/cyan]       — visual editor + runner")
+        console.print("  [cyan]publiminer run[/cyan]      — run the pipeline")
+        console.print("  [cyan]publiminer status[/cyan]   — inspect your corpus")
+
+
+def _launch_ui(cwd: Path) -> None:
+    """Hand off to Streamlit in the same terminal.
+
+    Blocks until the user closes the UI (Ctrl+C). Uses the same invocation
+    as ``publiminer ui`` so the experience is identical whether you get
+    there from the wizard or run ``publiminer ui`` directly.
+    """
+    import importlib.resources
+    import subprocess
+    import sys
+
+    try:
+        import streamlit  # noqa: F401
+    except ImportError:
+        console.print(
+            "\n[yellow]Streamlit isn't installed.[/yellow] Install the UI extras first:\n"
+            "  [cyan]pip install 'publiminer[ui]'[/cyan]   (or)   "
+            "[cyan]uv tool install 'publiminer[ui]'[/cyan]"
+        )
+        return
+
+    app_path = importlib.resources.files("publiminer.ui") / "app.py"
+    console.print("\n[bold green]→ Launching UI at http://localhost:8501[/bold green]")
+    console.print("  [dim]Press Ctrl+C in this terminal to stop the server.[/dim]\n")
+    subprocess.run(
+        [sys.executable, "-m", "streamlit", "run", str(app_path)],
+        check=False,
+        cwd=str(cwd),
     )

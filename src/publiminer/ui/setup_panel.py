@@ -167,15 +167,22 @@ def _step_scaffold() -> None:
         )
         st.session_state["_setup_scaffold"] = False
     else:
-        st.markdown(
-            "We can create a starter `publiminer.yaml` with an example query "
-            "(`diabetes AND machine learning`, 2024) so you can see the "
-            "pipeline work end-to-end. You'll edit it in the Config tab next."
+        st.info(
+            "📝 **What is publiminer.yaml?**\n\n"
+            "It's the pipeline's recipe file — it controls:\n"
+            "- **query** — what to search PubMed for\n"
+            "- **start_date / end_date** — the date range to fetch\n"
+            "- **steps** — which pipeline stages to run (fetch, parse, deduplicate…)\n"
+            "- **parameters** — per-step settings (fuzzy threshold, batch size, etc.)\n\n"
+            "The starter template ships with a small demo query "
+            "(`diabetes AND machine learning`, 2024) so you can see the pipeline "
+            "work end-to-end before writing your own query. You'll edit it in the "
+            "Configure tab next."
         )
         scaffold = st.checkbox(
             "Create starter publiminer.yaml",
             value=True,
-            help="You can always create one later from the Config tab.",
+            help="You can always create one later from the Configure tab.",
         )
         st.session_state["_setup_scaffold"] = scaffold
 
@@ -218,12 +225,22 @@ def _step_done() -> None:
         st.success(f"✅ Starter config written to `{result['yaml_created']}`")
 
     st.markdown("---")
+    st.markdown("### 🧭 What to do next")
     st.markdown(
-        "**What's next?**\n\n"
-        "- **Configure tab** — edit the query, date range, and pipeline steps\n"
-        "- **Run tab** — execute the pipeline with a live progress bar\n"
-        "- **Explore tab** — filter and sample papers once you have data\n"
-        "- **Status tab** — see your corpus size and schema at a glance"
+        "The UI you're about to enter has **four tabs**:\n\n"
+        "| Tab | What it does |\n"
+        "|---|---|\n"
+        "| ⚙️ **Configure** | Edit the query, dates, and pipeline steps |\n"
+        "| ▶️ **Run** | Execute the pipeline with a live progress bar |\n"
+        "| 🔍 **Explore** | Filter and sample papers once you have data |\n"
+        "| 📊 **Status** | Corpus size, schema, and last-run metadata |\n"
+    )
+
+    st.info(
+        "💡 **Big corpora (10k+ papers)?** Configure once in the Configure tab, "
+        "then let the pipeline run overnight with `publiminer run` (or schedule "
+        "`run_nightly.bat` via Task Scheduler on Windows / cron on macOS/Linux). "
+        "Check on it anytime with `publiminer status`."
     )
 
     if st.button("Open PubLiMiner →", type="primary", width="stretch"):

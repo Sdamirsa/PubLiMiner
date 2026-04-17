@@ -122,8 +122,9 @@ def test_scaffold_yaml_respects_existing(tmp_path: Path) -> None:
 def test_cli_setup_writes_everything(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Drive the full wizard end-to-end via stdin piping."""
     monkeypatch.chdir(tmp_path)
-    # Inputs in order: email, has-key-prompt (y), api_key, scaffold-yaml (Y)
-    stdin = "me@example.com\ny\nsk-test-abc123\nY\n"
+    # Inputs in order:
+    #   email, has-key-prompt (y), api_key, scaffold-yaml (Y), launch-ui (n)
+    stdin = "me@example.com\ny\nsk-test-abc123\nY\nn\n"
     result = runner.invoke(app, ["setup"], input=stdin)
     assert result.exit_code == 0, result.stdout
     assert (tmp_path / ".env").exists()
@@ -136,8 +137,8 @@ def test_cli_setup_writes_everything(tmp_path: Path, monkeypatch: pytest.MonkeyP
 def test_cli_setup_skip_api_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Wizard must accept 'no' for the API key and save a blank value."""
     monkeypatch.chdir(tmp_path)
-    # Inputs: email, has-key-prompt (N), scaffold-yaml (Y)
-    stdin = "me@example.com\nn\nY\n"
+    # Inputs: email, has-key-prompt (N), scaffold-yaml (Y), launch-ui (n)
+    stdin = "me@example.com\nn\nY\nn\n"
     result = runner.invoke(app, ["setup"], input=stdin)
     assert result.exit_code == 0, result.stdout
     values = read_env_values(tmp_path)
