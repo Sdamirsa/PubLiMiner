@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/publiminer.svg)](https://pypi.org/project/publiminer/)
 [![Python](https://img.shields.io/pypi/pyversions/publiminer.svg)](https://pypi.org/project/publiminer/)
 [![CI](https://github.com/sdamirsa/PubLiMiner/actions/workflows/ci.yml/badge.svg)](https://github.com/sdamirsa/PubLiMiner/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/sdamirsa/PubLiMiner/blob/main/LICENSE)
 
 PubLiMiner is a modular Python pipeline for mining biomedical literature from PubMed. It is designed for **200K+ paper corpora** with monthly incremental updates, a single Parquet file as the source of truth, and pluggable steps for embedding, clustering, and LLM-based structured extraction.
 
@@ -15,7 +15,7 @@ PubLiMiner is a modular Python pipeline for mining biomedical literature from Pu
 - **XML parsing** — extracts title, abstract, authors, journal, year, DOI, MeSH, keywords, grants, publication type, and more
 - **Deduplication** — 4-layer: PMID exact → DOI exact → fuzzy title (year-grouped) → retracted-paper removal
 - **Single source of truth** — every step reads/writes columns to one `papers.parquet` file
-- **Streamlit UI** — visual config editor, live progress, status panel, sample export (JSON/XLSX)
+- **Streamlit UI** — visual config editor, live progress, status panel, and an Explore tab with lazy-scan filters (year slider, publication-status, language) and sampling modes (first-N / random-N / stride), plus XLSX/JSON download
 - **Resumable** — atomic writes, idempotent imports, crash-safe
 - **Legacy import** — bulk-import existing JSON batches without re-downloading
 - **CLI + library** — use as a Typer CLI or as a Python package
@@ -33,7 +33,7 @@ Currently implemented: **fetch**, **parse**, **deduplicate**. The remaining step
 
 ## Architecture
 
-> Full architecture diagrams: [`docs/architecture.md`](docs/architecture.md)
+> Full architecture diagrams: [`docs/architecture.md`](https://github.com/sdamirsa/PubLiMiner/blob/main/docs/architecture.md)
 
 ```mermaid
 graph TB
@@ -214,11 +214,11 @@ PubLiMiner is designed to be re-run nightly without redoing any work:
 
 ## Development
 
-See [CLAUDE.md](CLAUDE.md) for the developer guide (architecture, conventions, how to add a new step).
+See [CLAUDE.md](https://github.com/sdamirsa/PubLiMiner/blob/main/CLAUDE.md) for the developer guide (architecture, conventions, how to add a new step).
 
 ```bash
 pip install -e ".[dev]"
-pytest                          # tests (coming soon)
+pytest                          # run the test suite
 ruff check src/                 # lint
 ruff format src/                # format
 mypy src/publiminer/            # type-check
@@ -226,7 +226,7 @@ mypy src/publiminer/            # type-check
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/sdamirsa/PubLiMiner/blob/main/LICENSE).
 
 ## Citation
 
