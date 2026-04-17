@@ -262,7 +262,7 @@ def run_wizard(cwd: Path | None = None, *, force: bool = False) -> None:
         if existing_key:
             console.print(f"  Current: [dim]{_mask(existing_key)}[/dim] (press enter to keep)")
         raw = typer.prompt(
-            "Paste your NCBI API key",
+            "Paste your NCBI API key (characters hidden for security)",
             default=existing_key,
             show_default=False,
             hide_input=True,
