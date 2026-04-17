@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sqlite3
 import time
 from pathlib import Path
 from typing import Any
 
 from publiminer.constants import CACHE_DEFAULT_TTL_DAYS, CACHE_FILENAME
-from publiminer.exceptions import CacheError
 
 
 class ResponseCache:
@@ -70,9 +68,7 @@ class ResponseCache:
         """
         key = self._make_key(namespace, params)
         conn = self._get_conn()
-        row = conn.execute(
-            "SELECT value, created_at FROM cache WHERE key = ?", (key,)
-        ).fetchone()
+        row = conn.execute("SELECT value, created_at FROM cache WHERE key = ?", (key,)).fetchone()
 
         if row is None:
             return None
@@ -139,10 +135,7 @@ class ResponseCache:
         rows = conn.execute(
             "SELECT namespace, COUNT(*), SUM(LENGTH(value)) FROM cache GROUP BY namespace"
         ).fetchall()
-        return {
-            row[0]: {"count": row[1], "total_bytes": row[2] or 0}
-            for row in rows
-        }
+        return {row[0]: {"count": row[1], "total_bytes": row[2] or 0} for row in rows}
 
     def close(self) -> None:
         """Close the database connection."""

@@ -28,9 +28,19 @@ import yaml
 # ── Paths ───────────────────────────────────────────────────────────
 DEFAULT_YAML = Path("publiminer.yaml")
 ALL_STEPS = [
-    "fetch", "parse", "deduplicate", "embed", "reduce",
-    "cluster", "sample", "extract", "score", "trend",
-    "rag", "patent", "export",
+    "fetch",
+    "parse",
+    "deduplicate",
+    "embed",
+    "reduce",
+    "cluster",
+    "sample",
+    "extract",
+    "score",
+    "trend",
+    "rag",
+    "patent",
+    "export",
 ]
 IMPLEMENTED_STEPS = {"fetch", "parse", "deduplicate"}
 
@@ -38,8 +48,14 @@ IMPLEMENTED_STEPS = {"fetch", "parse", "deduplicate"}
 # Excludes raw_xml (huge), abstract (long), and JSON columns (authors, mesh,
 # etc.) which are noisy in a table view but available via the multiselect.
 DEFAULT_PREVIEW_COLS = [
-    "pmid", "title", "year", "doi", "language",
-    "exclude_flag", "exclude_reason", "publication_status",
+    "pmid",
+    "title",
+    "year",
+    "doi",
+    "language",
+    "exclude_flag",
+    "exclude_reason",
+    "publication_status",
 ]
 
 
@@ -165,7 +181,9 @@ def get_year_range_from_stats(parquet_path: Path) -> tuple[int, int] | None:
 
 
 def read_preview_streaming(
-    parquet_path: Path, columns: list[str], n: int = 10,
+    parquet_path: Path,
+    columns: list[str],
+    n: int = 10,
 ) -> pl.DataFrame:
     """Read the first ``n`` rows with column projection — single batch.
 
@@ -196,13 +214,13 @@ def explore_query(
     year_max: int | None,
     has_doi: bool,
     has_abstract: bool,
-    exclude_choice: str,        # "any" | "included" | "excluded"
+    exclude_choice: str,  # "any" | "included" | "excluded"
     title_contains: str,
     title_use_regex: bool,
     language: str,
     columns: list[str],
     limit: int,
-    mode: str,                  # "first" | "random" | "stride"
+    mode: str,  # "first" | "random" | "stride"
     stride: int = 10,
     seed: int = 42,
 ) -> tuple[pl.DataFrame, int]:
@@ -242,9 +260,7 @@ def explore_query(
         if has_doi and "doi" in available:
             lf = lf.filter(pl.col("doi").is_not_null() & (pl.col("doi") != ""))
         if has_abstract and "abstract" in available:
-            lf = lf.filter(
-                pl.col("abstract").is_not_null() & (pl.col("abstract") != "")
-            )
+            lf = lf.filter(pl.col("abstract").is_not_null() & (pl.col("abstract") != ""))
         if exclude_choice == "included" and "exclude_flag" in available:
             lf = lf.filter(
                 (pl.col("exclude_flag") == False)  # noqa: E712
@@ -255,7 +271,9 @@ def explore_query(
         if title_contains and "title" in available:
             lf = lf.filter(
                 pl.col("title").str.contains(
-                    title_contains, literal=not title_use_regex, strict=False,
+                    title_contains,
+                    literal=not title_use_regex,
+                    strict=False,
                 )
             )
         if language and "language" in available:
@@ -285,7 +303,7 @@ def explore_query(
         sample_size = min(limit, total)
         chosen = rng.sample(all_pmids, sample_size)
     elif mode == "stride":
-        chosen = all_pmids[::max(1, stride)][:limit]
+        chosen = all_pmids[:: max(1, stride)][:limit]
     else:
         return pl.DataFrame(), total
 
@@ -386,12 +404,14 @@ with tab_config:
         )
     with c2:
         cfg["general"]["log_level"] = st.selectbox(
-            "Log level", ["DEBUG", "INFO", "WARNING", "ERROR"],
+            "Log level",
+            ["DEBUG", "INFO", "WARNING", "ERROR"],
             index=["DEBUG", "INFO", "WARNING", "ERROR"].index(cfg["general"]["log_level"]),
         )
     with c3:
         cfg["general"]["on_error"] = st.selectbox(
-            "On error", ["skip", "fail"],
+            "On error",
+            ["skip", "fail"],
             index=["skip", "fail"].index(cfg["general"]["on_error"]),
         )
 
@@ -412,13 +432,16 @@ with tab_config:
     c1, c2 = st.columns(2)
     with c1:
         f["query"] = st.text_area(
-            "Query", f["query"],
+            "Query",
+            f["query"],
             help="PubMed query syntax, e.g. `diabetes AND machine learning`",
             height=80,
         )
         f["email"] = st.text_input("Email (required by NCBI)", f["email"])
         f["api_key"] = st.text_input(
-            "NCBI API key (optional)", f["api_key"], type="password",
+            "NCBI API key (optional)",
+            f["api_key"],
+            type="password",
             help="Increases rate limit from 3 to 10 req/sec",
         )
     with c2:
@@ -431,7 +454,9 @@ with tab_config:
             "Batch size", min_value=1, max_value=9900, value=int(f["batch_size"])
         )
         f["rate_limit_per_second"] = st.number_input(
-            "Rate limit (req/sec)", min_value=0.1, value=float(f["rate_limit_per_second"]),
+            "Rate limit (req/sec)",
+            min_value=0.1,
+            value=float(f["rate_limit_per_second"]),
             step=0.5,
         )
 
@@ -444,9 +469,7 @@ with tab_config:
             "Min abstract length", min_value=0, value=int(p["min_abstract_length"])
         )
     with c2:
-        p["language_filter"] = st.text_input(
-            "Language filter (e.g. eng)", p["language_filter"]
-        )
+        p["language_filter"] = st.text_input("Language filter (e.g. eng)", p["language_filter"])
     with c3:
         p["remove_html"] = st.checkbox("Remove HTML", value=p["remove_html"])
     c1, c2 = st.columns(2)
@@ -466,17 +489,13 @@ with tab_config:
     with c1:
         d["check_doi"] = st.checkbox("Check DOI", value=d["check_doi"])
     with c2:
-        d["check_title_fuzzy"] = st.checkbox(
-            "Fuzzy title", value=d["check_title_fuzzy"]
-        )
+        d["check_title_fuzzy"] = st.checkbox("Fuzzy title", value=d["check_title_fuzzy"])
     with c3:
         d["fuzzy_threshold"] = st.slider(
             "Fuzzy threshold", min_value=70, max_value=100, value=int(d["fuzzy_threshold"])
         )
     with c4:
-        d["remove_retracted"] = st.checkbox(
-            "Remove retracted", value=d["remove_retracted"]
-        )
+        d["remove_retracted"] = st.checkbox("Remove retracted", value=d["remove_retracted"])
 
     st.divider()
     col_a, col_b = st.columns([1, 3])
@@ -484,9 +503,8 @@ with tab_config:
         if st.button("💾 Save YAML", type="primary", width="stretch"):
             save_yaml(yaml_path, cfg)
             st.success(f"Saved to {yaml_path}")
-    with col_b:
-        with st.expander("Preview YAML"):
-            st.code(yaml.safe_dump(cfg, sort_keys=False, default_flow_style=False), language="yaml")
+    with col_b, st.expander("Preview YAML"):
+        st.code(yaml.safe_dump(cfg, sort_keys=False, default_flow_style=False), language="yaml")
 
 # ─────────────── RUN TAB ────────────────────────────────────────────
 with tab_run:
@@ -502,9 +520,7 @@ with tab_run:
     with col_a:
         save_first = st.checkbox("Save YAML before running", value=True)
     with col_b:
-        steps_override = st.text_input(
-            "Override steps (comma-separated, optional)", value=""
-        )
+        steps_override = st.text_input("Override steps (comma-separated, optional)", value="")
 
     if st.button("▶️ Run pipeline", type="primary", width="stretch"):
         if save_first:
@@ -512,9 +528,14 @@ with tab_run:
             st.info(f"Saved config to {yaml_path}")
 
         cmd = [
-            sys.executable, "-m", "publiminer.cli", "run",
-            "--config", str(yaml_path),
-            "--output", cfg["general"]["output_dir"],
+            sys.executable,
+            "-m",
+            "publiminer.cli",
+            "run",
+            "--config",
+            str(yaml_path),
+            "--output",
+            cfg["general"]["output_dir"],
         ]
         if steps_override.strip():
             cmd += ["--steps", steps_override.strip()]
@@ -548,14 +569,14 @@ with tab_run:
                     # Intercept progress events
                     if line.startswith(PROGRESS_PREFIX):
                         try:
-                            evt = json.loads(line[len(PROGRESS_PREFIX):])
+                            evt = json.loads(line[len(PROGRESS_PREFIX) :])
                             cur = evt.get("current", 0)
                             tot = max(evt.get("total", 1), 1)
                             desc = evt.get("desc", evt.get("step", ""))
                             phase = evt.get("phase", "update")
                             pct = min(cur / tot, 1.0)
                             progress_label.markdown(
-                                f"**{desc}** — {cur:,} / {tot:,} ({pct*100:.0f}%)"
+                                f"**{desc}** — {cur:,} / {tot:,} ({pct * 100:.0f}%)"
                             )
                             progress_bar.progress(pct)
                             if phase == "end":
@@ -587,9 +608,7 @@ with tab_explore:
     summary = get_parquet_summary(output_dir)
 
     if summary is None:
-        st.warning(
-            f"No `papers.parquet` found in `{output_dir}/`. Run the pipeline first."
-        )
+        st.warning(f"No `papers.parquet` found in `{output_dir}/`. Run the pipeline first.")
     elif "error" in summary:
         st.error(f"Error reading parquet: {summary['error']}")
     else:
@@ -624,7 +643,8 @@ with tab_explore:
                 help="Case-insensitive substring (or regex if box below is checked).",
             )
             title_use_regex = st.checkbox(
-                "Treat as regex", value=False,
+                "Treat as regex",
+                value=False,
                 help="Off (default): literal substring. On: full regex syntax.",
             )
 
@@ -637,11 +657,14 @@ with tab_explore:
             ec1, ec2, ec3 = st.columns(3)
             with ec1:
                 has_doi = st.checkbox(
-                    "Has DOI", value=False, disabled="doi" not in all_columns,
+                    "Has DOI",
+                    value=False,
+                    disabled="doi" not in all_columns,
                 )
             with ec2:
                 has_abstract = st.checkbox(
-                    "Has abstract", value=False,
+                    "Has abstract",
+                    value=False,
                     disabled="abstract" not in all_columns,
                 )
             with ec3:
@@ -680,18 +703,28 @@ with tab_explore:
             )
         with mc2:
             limit = st.number_input(
-                "N", min_value=1, max_value=10_000, value=100, step=50,
+                "N",
+                min_value=1,
+                max_value=10_000,
+                value=100,
+                step=50,
             )
         with mc3:
             if mode == "random":
                 seed = st.number_input(
-                    "Seed", min_value=0, value=42, step=1,
+                    "Seed",
+                    min_value=0,
+                    value=42,
+                    step=1,
                     help="Same seed → same sample (reproducible).",
                 )
                 stride = 10
             elif mode == "stride":
                 stride = st.number_input(
-                    "Stride X", min_value=1, value=10, step=1,
+                    "Stride X",
+                    min_value=1,
+                    value=10,
+                    step=1,
                     help="Take every Xth row from the match set.",
                 )
                 seed = 42
@@ -830,15 +863,15 @@ with tab_status:
         with st.expander("Sample rows (first 10)", expanded=False):
             preview_cols = [c for c in DEFAULT_PREVIEW_COLS if c in summary["columns"]]
             preview_df = read_preview_streaming(
-                Path(output_dir) / "papers.parquet", preview_cols, n=10,
+                Path(output_dir) / "papers.parquet",
+                preview_cols,
+                n=10,
             )
             if len(preview_df) == 0:
                 st.info("No rows to preview.")
             else:
                 st.dataframe(preview_df.to_pandas(), width="stretch")
-                st.caption(
-                    "Use the **🔍 Explore** tab for filtered samples and exports."
-                )
+                st.caption("Use the **🔍 Explore** tab for filtered samples and exports.")
 
     st.divider()
     st.subheader("Step run history")

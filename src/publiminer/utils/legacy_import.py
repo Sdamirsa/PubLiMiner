@@ -22,15 +22,14 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from datetime import datetime
 from pathlib import Path
 
 import polars as pl
 
-from publiminer.core.spine import Spine
 from publiminer.constants import DEFAULT_OUTPUT_DIR
+from publiminer.core.spine import Spine
 from publiminer.utils.progress import ProgressReporter
 
 logger = logging.getLogger("publiminer.legacy_import")
@@ -51,8 +50,7 @@ def find_batch_files(source_dir: str | Path) -> list[Path]:
         return []
 
     files = sorted(
-        f for f in source.iterdir()
-        if f.name.startswith("pubmed_batch") and f.suffix == ".json"
+        f for f in source.iterdir() if f.name.startswith("pubmed_batch") and f.suffix == ".json"
     )
     logger.info(f"Found {len(files)} batch files in {source}")
     return files
@@ -92,13 +90,15 @@ def import_batch_file(file_path: Path) -> list[dict]:
         if not pmid_match:
             continue
 
-        rows.append({
-            "pmid": pmid_match.group(1),
-            "raw_xml": article_xml,
-            "fetch_date": timestamp,
-            "fetch_query": query,
-            "fetch_batch": batch_id,
-        })
+        rows.append(
+            {
+                "pmid": pmid_match.group(1),
+                "raw_xml": article_xml,
+                "fetch_date": timestamp,
+                "fetch_query": query,
+                "fetch_batch": batch_id,
+            }
+        )
 
     return rows
 
@@ -134,8 +134,9 @@ def import_legacy_data(
     total_files = 0
     duplicates = 0
 
-    with ProgressReporter("import_legacy", total=len(batch_files),
-                          desc="Importing batches") as progress:
+    with ProgressReporter(
+        "import_legacy", total=len(batch_files), desc="Importing batches"
+    ) as progress:
         for file_path in batch_files:
             rows = import_batch_file(file_path)
             total_files += 1
@@ -152,7 +153,9 @@ def import_legacy_data(
             if len(all_rows) >= 50000:
                 df = pl.DataFrame(all_rows)
                 spine.append(df)
-                logger.info(f"Written {len(all_rows)} rows ({total_files}/{len(batch_files)} files)")
+                logger.info(
+                    f"Written {len(all_rows)} rows ({total_files}/{len(batch_files)} files)"
+                )
                 all_rows = []
             progress.advance()
 

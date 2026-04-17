@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -32,8 +31,7 @@ def ui(
         import streamlit  # noqa: F401
     except ImportError:
         console.print(
-            "[red]Streamlit not installed.[/red] Run: "
-            "[bold]pip install 'publiminer[ui]'[/bold]"
+            "[red]Streamlit not installed.[/red] Run: [bold]pip install 'publiminer[ui]'[/bold]"
         )
         raise typer.Exit(1) from None
 
@@ -57,13 +55,12 @@ def ui(
 
 @app.command()
 def run(
-    config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to publiminer.yaml"),
-    output_dir: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory"),
-    steps: Optional[str] = typer.Option(None, "--steps", "-s", help="Comma-separated step list"),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to publiminer.yaml"),
+    output_dir: str | None = typer.Option(None, "--output", "-o", help="Output directory"),
+    steps: str | None = typer.Option(None, "--steps", "-s", help="Comma-separated step list"),
 ) -> None:
     """Run the pipeline (or specific steps)."""
-    from publiminer.core.config import load_config, load_step_config
-    from publiminer.core.global_schema import GlobalConfig
+    from publiminer.core.config import load_config
     from publiminer.utils.logger import setup_logger
 
     overrides = {}
@@ -73,7 +70,8 @@ def run(
         overrides["steps"] = [s.strip() for s in steps.split(",")]
 
     global_cfg = load_config(user_config_path=config, overrides=overrides or None)
-    setup_logger(level=global_cfg.general.log_level, log_dir=Path(global_cfg.general.output_dir) / "logs")
+    log_dir = Path(global_cfg.general.output_dir) / "logs"
+    setup_logger(level=global_cfg.general.log_level, log_dir=log_dir)
 
     out = output_dir or global_cfg.general.output_dir
 
@@ -86,7 +84,7 @@ def run(
         except Exception as e:
             console.print(f"  [red]✗[/red] {e}")
             if global_cfg.general.on_error == "fail":
-                raise typer.Exit(1)
+                raise typer.Exit(1) from None
 
 
 @app.command()
@@ -149,7 +147,7 @@ def status(
 def import_legacy(
     source_dir: str = typer.Argument(..., help="Directory with pubmed_batch_*.json files"),
     output_dir: str = typer.Option("output", "--output", "-o", help="Output directory"),
-    max_files: Optional[int] = typer.Option(None, "--max-files", help="Max files to import"),
+    max_files: int | None = typer.Option(None, "--max-files", help="Max files to import"),
 ) -> None:
     """Import legacy AI-in-Med-Trend batch files into PubLiMiner format."""
     from publiminer.utils.legacy_import import import_legacy_data
@@ -161,31 +159,39 @@ def import_legacy(
 
     result = import_legacy_data(source_dir, output_dir, max_files)
 
-    console.print(f"\n[green]Import complete![/green]")
+    console.print("\n[green]Import complete![/green]")
     console.print(f"  Files processed: {result['files']}")
     console.print(f"  Total articles: {result['articles']}")
     console.print(f"  Duplicates skipped: {result['duplicates']}")
 
 
-def _create_step(step_name: str, global_cfg: object, config_path: str | None, output_dir: str) -> object:
+def _create_step(
+    step_name: str,
+    global_cfg: object,
+    config_path: str | None,
+    output_dir: str,
+) -> object:
     """Create a step instance by name."""
     from publiminer.core.config import load_step_config
 
     if step_name == "fetch":
         from publiminer.steps.fetch.schema import FetchConfig
         from publiminer.steps.fetch.step import FetchStep
+
         step_cfg = load_step_config(step_name, FetchConfig, global_cfg, config_path)
         return FetchStep(global_cfg, step_cfg, output_dir)
 
     elif step_name == "parse":
         from publiminer.steps.parse.schema import ParseConfig
         from publiminer.steps.parse.step import ParseStep
+
         step_cfg = load_step_config(step_name, ParseConfig, global_cfg, config_path)
         return ParseStep(global_cfg, step_cfg, output_dir)
 
     elif step_name == "deduplicate":
         from publiminer.steps.deduplicate.schema import DeduplicateConfig
         from publiminer.steps.deduplicate.step import DeduplicateStep
+
         step_cfg = load_step_config(step_name, DeduplicateConfig, global_cfg, config_path)
         return DeduplicateStep(global_cfg, step_cfg, output_dir)
 

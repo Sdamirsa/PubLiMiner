@@ -8,7 +8,6 @@ Three-layer deduplication:
 
 from __future__ import annotations
 
-import json
 import logging
 from collections import defaultdict
 
@@ -101,18 +100,13 @@ class DeduplicateStep(StepBase):
         if self.config.check_doi:
             with ProgressReporter("dedup_doi", total=1, desc="Layer 2/4: DOI exact") as p:
                 doi_df = self.spine.read(columns=["pmid", "doi"])
-                if "doi" in doi_df.columns:
-                    to_remove = _find_doi_duplicates(doi_df)
-                else:
-                    to_remove = []
+                to_remove = _find_doi_duplicates(doi_df) if "doi" in doi_df.columns else []
                 p.advance()
             del doi_df
             if to_remove:
                 pmids_to_remove.update(to_remove)
                 self.logger.info(f"Layer 2: flagged {len(to_remove)} DOI duplicates")
-                removed.extend(
-                    [{"pmid": pmid, "reason": "doi_duplicate"} for pmid in to_remove]
-                )
+                removed.extend([{"pmid": pmid, "reason": "doi_duplicate"} for pmid in to_remove])
 
         # Layer 3: Title fuzzy match (projected read: pmid + title + year).
         if self.config.check_title_fuzzy:
@@ -123,10 +117,7 @@ class DeduplicateStep(StepBase):
                 # set of PMIDs dropped (for logging + remove_rows) instead of
                 # just the count.
                 norm_df = title_df.with_columns(
-                    pl.col("title")
-                    .str.to_lowercase()
-                    .str.strip_chars()
-                    .alias("_title_norm")
+                    pl.col("title").str.to_lowercase().str.strip_chars().alias("_title_norm")
                 )
                 valid = norm_df.filter(
                     pl.col("_title_norm").is_not_null() & (pl.col("_title_norm") != "")
@@ -139,9 +130,7 @@ class DeduplicateStep(StepBase):
                 del norm_df, valid
                 if exact_dupes:
                     pmids_to_remove.update(exact_dupes)
-                    self.logger.info(
-                        f"Layer 3a: flagged {len(exact_dupes)} exact-title duplicates"
-                    )
+                    self.logger.info(f"Layer 3a: flagged {len(exact_dupes)} exact-title duplicates")
                     removed.extend(
                         [{"pmid": pmid, "reason": "exact_title_duplicate"} for pmid in exact_dupes]
                     )
@@ -150,13 +139,13 @@ class DeduplicateStep(StepBase):
                 # don't waste comparisons on rows destined for removal.
                 remaining = title_df.filter(~pl.col("pmid").is_in(list(pmids_to_remove)))
                 fuzzy_dupes = _find_fuzzy_title_duplicates(
-                    remaining, threshold=self.config.fuzzy_threshold, logger=self.logger,
+                    remaining,
+                    threshold=self.config.fuzzy_threshold,
+                    logger=self.logger,
                 )
                 if fuzzy_dupes:
                     pmids_to_remove.update(fuzzy_dupes)
-                    self.logger.info(
-                        f"Layer 3b: flagged {len(fuzzy_dupes)} fuzzy title duplicates"
-                    )
+                    self.logger.info(f"Layer 3b: flagged {len(fuzzy_dupes)} fuzzy title duplicates")
                     removed.extend(
                         [{"pmid": pmid, "reason": "fuzzy_title_duplicate"} for pmid in fuzzy_dupes]
                     )
@@ -167,9 +156,7 @@ class DeduplicateStep(StepBase):
         if self.config.remove_retracted:
             ret_df = self.spine.read(columns=["pmid", "publication_status"])
             if "publication_status" in ret_df.columns:
-                with ProgressReporter(
-                    "dedup_retracted", total=1, desc="Layer 4/4: Retracted"
-                ) as p:
+                with ProgressReporter("dedup_retracted", total=1, desc="Layer 4/4: Retracted") as p:
                     retracted_mask = (
                         pl.col("publication_status")
                         .str.to_lowercase()
@@ -180,9 +167,7 @@ class DeduplicateStep(StepBase):
                 if len(retracted) > 0:
                     retracted_pmids = retracted["pmid"].to_list()
                     pmids_to_remove.update(retracted_pmids)
-                    self.logger.info(
-                        f"Layer 4: flagged {len(retracted_pmids)} retracted papers"
-                    )
+                    self.logger.info(f"Layer 4: flagged {len(retracted_pmids)} retracted papers")
                     removed.extend(
                         [{"pmid": pmid, "reason": "retracted"} for pmid in retracted_pmids]
                     )
@@ -202,15 +187,11 @@ class DeduplicateStep(StepBase):
         meta.rows_removed = total_removed
         meta.extra["removed_details"] = removed
         meta.extra["pmid_duplicates"] = pmid_dupes
-        meta.extra["doi_duplicates"] = len(
-            [r for r in removed if r["reason"] == "doi_duplicate"]
-        )
+        meta.extra["doi_duplicates"] = len([r for r in removed if r["reason"] == "doi_duplicate"])
         meta.extra["fuzzy_duplicates"] = len(
             [r for r in removed if r["reason"] == "fuzzy_title_duplicate"]
         )
-        meta.extra["retracted"] = len(
-            [r for r in removed if r["reason"] == "retracted"]
-        )
+        meta.extra["retracted"] = len([r for r in removed if r["reason"] == "retracted"])
 
         self.logger.info(
             f"Deduplication complete: {meta.rows_before} -> {rows_after} rows "
@@ -314,8 +295,10 @@ def _find_fuzzy_title_duplicates(
     pair_idx = 0
 
     with ProgressReporter(
-        "dedup_fuzzy", total=total_pairs,
-        desc="Layer 3/4: Fuzzy title", update_every=update_every,
+        "dedup_fuzzy",
+        total=total_pairs,
+        desc="Layer 3/4: Fuzzy title",
+        update_every=update_every,
     ) as progress:
         for papers in work_blocks:
             n = len(papers)

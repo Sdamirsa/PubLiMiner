@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from pydantic import BaseModel, Field
 
 from publiminer.constants import DEFAULT_OUTPUT_DIR
@@ -31,8 +30,18 @@ class GlobalConfig(BaseModel):
     cache: CacheConfig = Field(default_factory=CacheConfig)
     steps: list[str] = Field(
         default_factory=lambda: [
-            "fetch", "parse", "deduplicate", "embed", "reduce",
-            "cluster", "sample", "extract", "score", "trend",
-            "rag", "patent", "export",
+            "fetch",
+            "parse",
+            "deduplicate",
+            "embed",
+            "reduce",
+            "cluster",
+            "sample",
+            "extract",
+            "score",
+            "trend",
+            "rag",
+            "patent",
+            "export",
         ]
     )

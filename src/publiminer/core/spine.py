@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import gc
 import os
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import polars as pl
 import pyarrow as pa
@@ -28,7 +28,7 @@ STAGING_FILENAME = PARQUET_FILENAME + ".staging"
 # iter_batches' effective batch size).
 PARQUET_COMPRESSION = "zstd"
 PARQUET_COMPRESSION_LEVEL = 3
-PARQUET_ROW_GROUP_SIZE = 50_000   # ~500 MB decoded per group at ~10 KB/row raw_xml
+PARQUET_ROW_GROUP_SIZE = 50_000  # ~500 MB decoded per group at ~10 KB/row raw_xml
 PARQUET_DATA_PAGE_SIZE = 1 << 20  # 1 MB pages (fat rows, mostly raw_xml)
 
 
@@ -94,8 +94,7 @@ class Spine:
         if not self.staging_exists:
             return set()
         return set(
-            pl.read_parquet(self.staging_path, memory_map=False, columns=["pmid"])
-            ["pmid"].to_list()
+            pl.read_parquet(self.staging_path, memory_map=False, columns=["pmid"])["pmid"].to_list()
         )
 
     def merge_staging(self) -> int:
@@ -140,9 +139,7 @@ class Spine:
                 for name in union_schema.names:
                     if name not in tbl.schema.names:
                         field = union_schema.field(name)
-                        tbl = tbl.append_column(
-                            name, pa.nulls(len(tbl), type=field.type)
-                        )
+                        tbl = tbl.append_column(name, pa.nulls(len(tbl), type=field.type))
                 tbl = tbl.select(union_schema.names)
                 writer.write_table(tbl, row_group_size=PARQUET_ROW_GROUP_SIZE)
 
@@ -193,7 +190,9 @@ class Spine:
             if not valid_cols:
                 raise SpineError(f"None of the requested columns exist: {columns}")
             df = pl.read_parquet(
-                self.parquet_path, memory_map=False, columns=valid_cols,
+                self.parquet_path,
+                memory_map=False,
+                columns=valid_cols,
             )
         else:
             df = pl.read_parquet(self.parquet_path, memory_map=False)
@@ -234,7 +233,9 @@ class Spine:
             if missing:
                 raise SpineError(f"Columns not in parquet: {missing}")
         yield from pf.iter_batches(
-            batch_size=batch_size, columns=columns, use_threads=True,
+            batch_size=batch_size,
+            columns=columns,
+            use_threads=True,
         )
 
     def write(self, df: pl.DataFrame) -> None:
@@ -340,9 +341,7 @@ class Spine:
                 continue
             if col not in existing.columns:
                 dtype = new_df.schema[col]
-                existing = existing.with_columns(
-                    pl.lit(None).cast(dtype).alias(col)
-                )
+                existing = existing.with_columns(pl.lit(None).cast(dtype).alias(col))
 
         result = existing.update(new_df, on=on, how="left")
         self.write(result)

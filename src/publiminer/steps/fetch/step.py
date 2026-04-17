@@ -206,8 +206,7 @@ class FetchStep(StepBase):
             meta.extra["start_date"] = start_date
             meta.extra["end_date"] = end_date
             self.logger.info(
-                f"Fetch complete: {added:,} new, {skipped:,} duplicates skipped, "
-                f"{batches} batches"
+                f"Fetch complete: {added:,} new, {skipped:,} duplicates skipped, {batches} batches"
             )
         finally:
             client.close()
@@ -235,8 +234,13 @@ class FetchStep(StepBase):
             retstart = i * batch_size
             retmax = min(batch_size, target - retstart)
             data = client.fetch_batch(
-                web_env, query_key, retstart, retmax,
-                self.config.download_mode, self.config.ret_mode, self.config.ret_type,
+                web_env,
+                query_key,
+                retstart,
+                retmax,
+                self.config.download_mode,
+                self.config.ret_mode,
+                self.config.ret_type,
             )
             yield {
                 "query": self.config.query,
@@ -254,9 +258,7 @@ class FetchStep(StepBase):
         self.logger.info(f"Flushed {len(rows):,} articles to staging")
 
 
-def _extract_articles(
-    batch: dict, existing_pmids: set[str]
-) -> tuple[list[dict], int]:
+def _extract_articles(batch: dict, existing_pmids: set[str]) -> tuple[list[dict], int]:
     """Extract per-article rows from one batch's XML; mutate existing_pmids in-place.
 
     Returns (new_rows, duplicates_skipped).
@@ -279,11 +281,13 @@ def _extract_articles(
             dup += 1
             continue
         existing_pmids.add(pmid)
-        rows.append({
-            "pmid": pmid,
-            "raw_xml": article_xml,
-            "fetch_date": timestamp,
-            "fetch_query": query,
-            "fetch_batch": str(batch_id),
-        })
+        rows.append(
+            {
+                "pmid": pmid,
+                "raw_xml": article_xml,
+                "fetch_date": timestamp,
+                "fetch_query": query,
+                "fetch_batch": str(batch_id),
+            }
+        )
     return rows, dup

@@ -13,8 +13,9 @@ import random
 import re
 import time
 import urllib.parse
+from collections.abc import Iterator
 from datetime import datetime, timedelta
-from typing import Any, Iterator
+from typing import Any
 
 import httpx
 
@@ -104,7 +105,7 @@ class PubMedClient:
                     raise APIError("pubmed", str(e), status) from e
                 last_exc = e
             except (
-                httpx.RemoteProtocolError,   # peer closed connection
+                httpx.RemoteProtocolError,  # peer closed connection
                 httpx.ReadTimeout,
                 httpx.ConnectError,
                 httpx.ConnectTimeout,
@@ -117,7 +118,7 @@ class PubMedClient:
 
             # Exponential backoff with jitter
             if attempt < self.max_retries - 1:
-                sleep_s = min(60.0, (2 ** attempt) + random.uniform(0, 1))
+                sleep_s = min(60.0, (2**attempt) + random.uniform(0, 1))
                 logger.warning(
                     f"PubMed request failed ({type(last_exc).__name__}: "
                     f"{str(last_exc)[:80]}); retry {attempt + 1}/"
@@ -160,7 +161,10 @@ class PubMedClient:
             Tuple of (web_env, query_key, result_count).
         """
         encoded_query = urllib.parse.quote_plus(query)
-        url = f"{PUBMED_BASE_URL}esearch.fcgi?{self._build_base_params()}&term={encoded_query}&usehistory=y"
+        url = (
+            f"{PUBMED_BASE_URL}esearch.fcgi?"
+            f"{self._build_base_params()}&term={encoded_query}&usehistory=y"
+        )
 
         logger.debug(f"Searching PubMed: {query[:100]}...")
 
@@ -220,10 +224,7 @@ class PubMedClient:
         logger.debug(f"search_pmids: page 0 → {len(all_pmids)} PMIDs")
 
         if total <= page_size or not web_env_match or not query_key_match:
-            logger.info(
-                f"search_pmids: collected {len(all_pmids):,} PMIDs "
-                f"(expected {total:,})"
-            )
+            logger.info(f"search_pmids: collected {len(all_pmids):,} PMIDs (expected {total:,})")
             return all_pmids
 
         # Step 2: page through remaining IDs using the WebEnv session
@@ -245,10 +246,7 @@ class PubMedClient:
                 f"(total so far: {len(all_pmids):,})"
             )
 
-        logger.info(
-            f"search_pmids: collected {len(all_pmids):,} PMIDs "
-            f"(expected {total:,})"
-        )
+        logger.info(f"search_pmids: collected {len(all_pmids):,} PMIDs (expected {total:,})")
         return all_pmids
 
     def fetch_by_pmids(
@@ -273,10 +271,7 @@ class PubMedClient:
         endpoint = "esummary.fcgi" if download_mode == "summary" else "efetch.fcgi"
 
         id_str = ",".join(pmids)
-        url = (
-            f"{PUBMED_BASE_URL}{endpoint}?{self._build_base_params()}"
-            f"&id={id_str}"
-        )
+        url = f"{PUBMED_BASE_URL}{endpoint}?{self._build_base_params()}&id={id_str}"
         if ret_mode:
             url += f"&retmode={ret_mode}"
         if ret_type:
@@ -322,10 +317,7 @@ class PubMedClient:
         """
         ret_mode, ret_type = self.validate_return_format(ret_mode, ret_type)
 
-        if download_mode == "summary":
-            endpoint = "esummary.fcgi"
-        else:
-            endpoint = "efetch.fcgi"
+        endpoint = "esummary.fcgi" if download_mode == "summary" else "efetch.fcgi"
 
         url = (
             f"{PUBMED_BASE_URL}{endpoint}?"
@@ -356,9 +348,7 @@ class PubMedClient:
 
         return result
 
-    def generate_monthly_date_ranges(
-        self, start_date: str, end_date: str
-    ) -> list[dict[str, Any]]:
+    def generate_monthly_date_ranges(self, start_date: str, end_date: str) -> list[dict[str, Any]]:
         """Generate monthly date ranges between start and end dates.
 
         Args:
@@ -375,29 +365,28 @@ class PubMedClient:
 
         while current <= end:
             year, month = current.year, current.month
-            if month == 12:
-                next_month = datetime(year + 1, 1, 1)
-            else:
-                next_month = datetime(year, month + 1, 1)
+            next_month = datetime(year + 1, 1, 1) if month == 12 else datetime(year, month + 1, 1)
 
             last_day = next_month - timedelta(days=1)
             first_str = f"{year}/{month:02d}/01"
             last_str = f"{year}/{month:02d}/{last_day.day:02d}"
 
-            ranges.append({
-                "start_date": first_str,
-                "end_date": last_str,
-                "query_fragment": f'"{first_str}"[Date - Publication] : "{last_str}"[Date - Publication]',
-                "month_year": f"{year}-{month:02d}",
-            })
+            ranges.append(
+                {
+                    "start_date": first_str,
+                    "end_date": last_str,
+                    "query_fragment": (
+                        f'"{first_str}"[Date - Publication] : "{last_str}"[Date - Publication]'
+                    ),
+                    "month_year": f"{year}-{month:02d}",
+                }
+            )
 
             current = next_month
 
         return ranges
 
-    def get_monthly_counts(
-        self, query: str, date_ranges: list[dict[str, Any]]
-    ) -> dict[str, int]:
+    def get_monthly_counts(self, query: str, date_ranges: list[dict[str, Any]]) -> dict[str, int]:
         """Get result counts for each monthly date range.
 
         Args:
@@ -464,14 +453,16 @@ class PubMedClient:
                 start = date_ranges[batch_start_idx]["start_date"]
                 end = date_ranges[i - 1]["end_date"]
                 date_query = f'"{start}"[Date - Publication] : "{end}"[Date - Publication]'
-                queries.append({
-                    "query": f"({base_query}) AND ({date_query})",
-                    "count": current_count,
-                    "start_date": start,
-                    "end_date": end,
-                    "date_range": date_query,
-                    "batch_id": len(queries),
-                })
+                queries.append(
+                    {
+                        "query": f"({base_query}) AND ({date_query})",
+                        "count": current_count,
+                        "start_date": start,
+                        "end_date": end,
+                        "date_range": date_query,
+                        "batch_id": len(queries),
+                    }
+                )
                 current_count = 0
                 batch_start_idx = i
 
@@ -482,14 +473,16 @@ class PubMedClient:
             start = date_ranges[batch_start_idx]["start_date"]
             end = date_ranges[-1]["end_date"]
             date_query = f'"{start}"[Date - Publication] : "{end}"[Date - Publication]'
-            queries.append({
-                "query": f"({base_query}) AND ({date_query})",
-                "count": current_count,
-                "start_date": start,
-                "end_date": end,
-                "date_range": date_query,
-                "batch_id": len(queries),
-            })
+            queries.append(
+                {
+                    "query": f"({base_query}) AND ({date_query})",
+                    "count": current_count,
+                    "start_date": start,
+                    "end_date": end,
+                    "date_range": date_query,
+                    "batch_id": len(queries),
+                }
+            )
 
         return queries
 
@@ -509,10 +502,7 @@ class PubMedClient:
         monthly_counts = self.get_monthly_counts(base_query, date_ranges)
         optimized = self.create_optimized_queries(base_query, date_ranges, monthly_counts)
         total = sum(q["count"] for q in optimized)
-        logger.info(
-            f"Plan ready: {len(optimized)} optimized queries, "
-            f"~{total:,} articles to fetch"
-        )
+        logger.info(f"Plan ready: {len(optimized)} optimized queries, ~{total:,} articles to fetch")
         return optimized, total
 
     # PubMed WebEnv hard limit: retstart + retmax must stay under this.
@@ -572,9 +562,13 @@ class PubMedClient:
                 retstart = i * batch_size
                 retmax = min(batch_size, actual_count - retstart)
                 data = self.fetch_batch(
-                    web_env=web_env, query_key=query_key,
-                    retstart=retstart, retmax=retmax,
-                    download_mode=download_mode, ret_mode=ret_mode, ret_type=ret_type,
+                    web_env=web_env,
+                    query_key=query_key,
+                    retstart=retstart,
+                    retmax=retmax,
+                    download_mode=download_mode,
+                    ret_mode=ret_mode,
+                    ret_type=ret_type,
                 )
                 yield {
                     "query": query,
@@ -628,10 +622,7 @@ class PubMedClient:
         if not base_query:
             # Reconstruct: query is "(<base>) AND (<date_range>)"
             date_range_str = query_info.get("date_range", "")
-            if date_range_str:
-                base_query = query.replace(f" AND ({date_range_str})", "")
-            else:
-                base_query = query
+            base_query = query.replace(f" AND ({date_range_str})", "") if date_range_str else query
 
         for sub_start, sub_end in [(start_date, mid_str), (next_day_str, end_date)]:
             date_query = f'"{sub_start}"[Date - Publication] : "{sub_end}"[Date - Publication]'
@@ -716,7 +707,8 @@ class PubMedClient:
         optimized = self.create_optimized_queries(base_query, date_ranges, monthly_counts)
         total_articles = sum(q["count"] for q in optimized)
         logger.info(
-            f"Streaming fetch: {len(optimized)} optimized queries, ~{total_articles:,} articles total"
+            f"Streaming fetch: {len(optimized)} optimized queries, "
+            f"~{total_articles:,} articles total"
         )
 
         for query_info in optimized:
@@ -809,18 +801,20 @@ class PubMedClient:
                     ret_type=ret_type,
                 )
 
-                all_results.append({
-                    "query": query,
-                    "batch_id": f"{batch_id}_{i}",
-                    "retstart": retstart,
-                    "retmax": retmax,
-                    "total_count": actual_count,
-                    "download_mode": download_mode,
-                    "ret_mode": ret_mode,
-                    "ret_type": ret_type,
-                    "timestamp": datetime.now().isoformat(),
-                    "data": data,
-                })
+                all_results.append(
+                    {
+                        "query": query,
+                        "batch_id": f"{batch_id}_{i}",
+                        "retstart": retstart,
+                        "retmax": retmax,
+                        "total_count": actual_count,
+                        "download_mode": download_mode,
+                        "ret_mode": ret_mode,
+                        "ret_type": ret_type,
+                        "timestamp": datetime.now().isoformat(),
+                        "data": data,
+                    }
+                )
 
         return all_results
 

@@ -107,10 +107,7 @@ class ProgressReporter:
                 f"{pct_str}in {elapsed:.0f}s ({rate:.0f}/s)"
             )
         else:
-            msg = (
-                f"[{ts}] {self.desc}: {self.current:,}/{total_str} "
-                f"{pct_str}{rate:.0f}/s"
-            )
+            msg = f"[{ts}] {self.desc}: {self.current:,}/{total_str} {pct_str}{rate:.0f}/s"
         sys.stdout.write(msg + "\n")
         sys.stdout.flush()
 
@@ -131,13 +128,15 @@ class ProgressReporter:
         elif self._mode == "log":
             self._log_line("start")
         else:
-            _emit_event({
-                "step": self.step,
-                "phase": "start",
-                "current": 0,
-                "total": self.total,
-                "desc": self.desc,
-            })
+            _emit_event(
+                {
+                    "step": self.step,
+                    "phase": "start",
+                    "current": 0,
+                    "total": self.total,
+                    "desc": self.desc,
+                }
+            )
         return self
 
     def advance(self, n: int = 1) -> None:
@@ -155,13 +154,15 @@ class ProgressReporter:
         else:
             # Throttle: emit only every N items, plus the final tick
             if self.current % self.update_every == 0 or self.current >= self.total:
-                _emit_event({
-                    "step": self.step,
-                    "phase": "update",
-                    "current": min(self.current, self.total),
-                    "total": self.total,
-                    "desc": self.desc,
-                })
+                _emit_event(
+                    {
+                        "step": self.step,
+                        "phase": "update",
+                        "current": min(self.current, self.total),
+                        "total": self.total,
+                        "desc": self.desc,
+                    }
+                )
 
     def __exit__(
         self,
@@ -175,10 +176,12 @@ class ProgressReporter:
         elif self._mode == "log":
             self._log_line("end")
         else:
-            _emit_event({
-                "step": self.step,
-                "phase": "end",
-                "current": min(self.current, self.total),
-                "total": self.total,
-                "desc": self.desc,
-            })
+            _emit_event(
+                {
+                    "step": self.step,
+                    "phase": "end",
+                    "current": min(self.current, self.total),
+                    "total": self.total,
+                    "desc": self.desc,
+                }
+            )

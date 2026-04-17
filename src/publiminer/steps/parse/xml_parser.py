@@ -9,7 +9,6 @@ flagging integrated as post-parse enrichments.
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 import xml.etree.ElementTree as ET
@@ -253,10 +252,12 @@ def _extract_publication_types(article_elem: ET.Element) -> list[dict[str, str]]
 
     for pt_elem in pub_type_list.findall("./PublicationType"):
         if pt_elem.text:
-            pub_types.append({
-                "type": pt_elem.text,
-                "ui": pt_elem.get("UI", ""),
-            })
+            pub_types.append(
+                {
+                    "type": pt_elem.text,
+                    "ui": pt_elem.get("UI", ""),
+                }
+            )
 
     return pub_types
 
@@ -373,11 +374,13 @@ def _extract_mesh_headings(medline: ET.Element) -> list[dict[str, Any]]:
         qualifiers = []
         for qualifier in mesh_elem.findall("./QualifierName"):
             if qualifier.text:
-                qualifiers.append({
-                    "name": qualifier.text,
-                    "ui": qualifier.get("UI", ""),
-                    "major": qualifier.get("MajorTopicYN", "N") == "Y",
-                })
+                qualifiers.append(
+                    {
+                        "name": qualifier.text,
+                        "ui": qualifier.get("UI", ""),
+                        "major": qualifier.get("MajorTopicYN", "N") == "Y",
+                    }
+                )
         if qualifiers:
             heading["qualifiers"] = qualifiers
 
@@ -394,11 +397,13 @@ def _extract_keywords(medline: ET.Element) -> list[dict[str, Any]]:
         owner = keyword_list.get("Owner", "")
         for kw_elem in keyword_list.findall("./Keyword"):
             if kw_elem.text:
-                all_keywords.append({
-                    "keyword": kw_elem.text,
-                    "major": kw_elem.get("MajorTopicYN", "N") == "Y",
-                    "owner": owner,
-                })
+                all_keywords.append(
+                    {
+                        "keyword": kw_elem.text,
+                        "major": kw_elem.get("MajorTopicYN", "N") == "Y",
+                        "owner": owner,
+                    }
+                )
     return all_keywords
 
 

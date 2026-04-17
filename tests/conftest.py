@@ -13,7 +13,9 @@ SAMPLE_PUBMED_XML = """<?xml version="1.0"?>
     <PMID Version="1">11111111</PMID>
     <Article>
       <ArticleTitle>Deep learning for medical imaging</ArticleTitle>
-      <Abstract><AbstractText>We present a CNN approach for MRI segmentation.</AbstractText></Abstract>
+      <Abstract>
+        <AbstractText>We present a CNN approach for MRI segmentation.</AbstractText>
+      </Abstract>
       <AuthorList>
         <Author><LastName>Smith</LastName><ForeName>Jane</ForeName></Author>
       </AuthorList>

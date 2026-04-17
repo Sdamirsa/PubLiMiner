@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
@@ -53,10 +52,10 @@ class StepBase(ABC):
             StepMeta with run statistics.
         """
 
-    def validate_input(self) -> None:
+    def validate_input(self) -> None:  # noqa: B027
         """Validate that required input data exists. Override in subclasses."""
 
-    def validate_output(self) -> None:
+    def validate_output(self) -> None:  # noqa: B027
         """Validate that output data was written correctly. Override in subclasses."""
 
     def execute(self) -> StepMeta:

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator, Sequence
 from pathlib import Path
-from typing import Iterator, Sequence, TypeVar
+from typing import TypeVar
 
 T = TypeVar("T")
 

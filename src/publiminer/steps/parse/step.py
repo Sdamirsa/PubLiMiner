@@ -81,7 +81,8 @@ class ParseStep(StepBase):
         parsed_pmids: set[str] = set()
         if "title" in schema_names:
             for batch in self.spine.iter_batches(
-                columns=["pmid", "title"], batch_size=100_000,
+                columns=["pmid", "title"],
+                batch_size=100_000,
             ):
                 pmids = batch.column("pmid").to_pylist()
                 titles = batch.column("title").to_pylist()
@@ -99,8 +100,7 @@ class ParseStep(StepBase):
 
         if "title" in schema_names:
             self.logger.info(
-                f"Incremental parse: {len(parsed_pmids):,} already parsed, "
-                f"{to_parse:,} to parse"
+                f"Incremental parse: {len(parsed_pmids):,} already parsed, {to_parse:,} to parse"
             )
         else:
             self.logger.info(f"Fresh parquet: parsing all {to_parse:,} rows")
@@ -114,10 +114,14 @@ class ParseStep(StepBase):
         # parquet row-group size, so this assumes papers.parquet was
         # written/migrated with PARQUET_ROW_GROUP_SIZE.
         with ProgressReporter(
-            "parse", total=to_parse, desc="Parsing XML", update_every=update_every,
+            "parse",
+            total=to_parse,
+            desc="Parsing XML",
+            update_every=update_every,
         ) as progress:
             for batch in self.spine.iter_batches(
-                columns=["pmid", "raw_xml"], batch_size=5_000,
+                columns=["pmid", "raw_xml"],
+                batch_size=5_000,
             ):
                 pmids = batch.column("pmid").to_pylist()
                 raw_xmls = batch.column("raw_xml").to_pylist()
@@ -164,9 +168,7 @@ class ParseStep(StepBase):
         return meta
 
 
-def _article_to_flat_row(
-    article: dict, pmid: str, config: ParseConfig
-) -> dict:
+def _article_to_flat_row(article: dict, pmid: str, config: ParseConfig) -> dict:
     """Convert a parsed article dict to a flat row for Parquet.
 
     Complex fields (authors, journal, mesh, keywords, etc.) are stored
