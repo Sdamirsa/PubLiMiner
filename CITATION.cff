@@ -5,6 +5,10 @@ type: software
 authors:
   - family-names: Safavi-Naini
     given-names: Seyed Amir Ahmad
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.19632815
+    description: Concept DOI (always points to the latest release)
 repository-code: "https://github.com/sdamirsa/PubLiMiner"
 url: "https://github.com/sdamirsa/PubLiMiner"
 license: MIT
