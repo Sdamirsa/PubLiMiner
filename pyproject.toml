@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "publiminer"
-version = "0.1.0"
+version = "0.2.0"
 description = "Publication Literature Miner — PubMed API, embedding-based clustering, and LLM structured-output extraction"
 readme = "README.md"
 license = { text = "MIT" }
@@ -72,6 +72,7 @@ packages = ["src/publiminer"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "publiminer.yaml" = "publiminer/examples/publiminer.yaml"
+"src/publiminer/templates/publiminer.starter.yaml" = "publiminer/templates/publiminer.starter.yaml"
 
 [tool.hatch.build.targets.sdist]
 include = [

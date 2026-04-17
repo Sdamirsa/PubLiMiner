@@ -18,9 +18,52 @@ console = Console()
 
 
 @app.command()
+def setup(
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Run the wizard even if .env looks complete.",
+    ),
+) -> None:
+    """First-run setup wizard — captures email + NCBI key, scaffolds a starter config.
+
+    Run this once per project folder. ``publiminer ui`` and ``publiminer run``
+    auto-invoke the wizard when they detect a missing or incomplete ``.env``;
+    use this command to re-run it explicitly (e.g. to change credentials).
+    """
+    from publiminer.commands.setup import run_wizard
+
+    run_wizard(force=force)
+
+
+def _ensure_setup(no_setup: bool) -> None:
+    """Auto-trigger the CLI wizard when ``.env`` is missing.
+
+    Called from the top of ``ui()`` and ``run()``. Skipped when:
+    - ``--no-setup`` flag is passed (scripted / advanced use)
+    - ``PUBLIMINER_NO_WIZARD=1`` env var is set (CI)
+    - ``.env`` already has a valid ``PUBMED_EMAIL``
+    """
+    if no_setup:
+        return
+    from publiminer.commands.setup import run_wizard, wizard_should_run
+
+    if wizard_should_run():
+        run_wizard()
+        # Re-load .env so the freshly-written values are picked up by the
+        # current process (dotenv.load_dotenv caches).
+        load_env()
+
+
+@app.command()
 def ui(
     port: int = typer.Option(8501, "--port", "-p", help="Port for the Streamlit server"),
     host: str = typer.Option("localhost", "--host", "-h", help="Host address to bind"),
+    no_setup: bool = typer.Option(
+        False,
+        "--no-setup",
+        help="Skip the first-run wizard even if .env is missing.",
+    ),
 ) -> None:
     """Launch the bundled Streamlit configuration + runner UI."""
     import importlib.resources
@@ -34,6 +77,16 @@ def ui(
             "[red]Streamlit not installed.[/red] Run: [bold]pip install 'publiminer[ui]'[/bold]"
         )
         raise typer.Exit(1) from None
+
+    # Note: we do NOT run _ensure_setup() here. The Streamlit UI has its own
+    # interactive wizard (src/publiminer/ui/setup_panel.py) which is a far
+    # better first-run experience in a browser context. ``--no-setup`` is
+    # still honored by the UI via the PUBLIMINER_NO_WIZARD env var below.
+    import os
+
+    env = os.environ.copy()
+    if no_setup:
+        env["PUBLIMINER_NO_WIZARD"] = "1"
 
     app_path = importlib.resources.files("publiminer.ui") / "app.py"
     console.print(f"[bold green]Launching PubLiMiner UI[/bold green] at http://{host}:{port}")
@@ -50,6 +103,7 @@ def ui(
             host,
         ],
         check=False,
+        env=env,
     )
 
 
@@ -58,8 +112,15 @@ def run(
     config: str | None = typer.Option(None, "--config", "-c", help="Path to publiminer.yaml"),
     output_dir: str | None = typer.Option(None, "--output", "-o", help="Output directory"),
     steps: str | None = typer.Option(None, "--steps", "-s", help="Comma-separated step list"),
+    no_setup: bool = typer.Option(
+        False,
+        "--no-setup",
+        help="Skip the first-run wizard even if .env is missing.",
+    ),
 ) -> None:
     """Run the pipeline (or specific steps)."""
+    _ensure_setup(no_setup)
+
     from publiminer.core.config import load_config
     from publiminer.utils.logger import setup_logger
 

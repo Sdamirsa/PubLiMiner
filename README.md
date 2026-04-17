@@ -74,27 +74,58 @@ graph TB
 
 ## Getting started
 
-Requires **Python 3.11+**. Pick the path that matches how you want to use it.
-
-<details>
-<summary><b>🖱️ No-code users — click through a UI (recommended for first time)</b></summary>
+**One line** gets you installed and into the UI — same text on macOS, Linux, and Windows:
 
 ```bash
-pip install "publiminer[ui]"
-publiminer ui
+uv tool install "publiminer[ui]" && publiminer ui
 ```
 
-The browser opens to a 4-tab interface:
+The first time you run it, an interactive wizard walks you through email + NCBI key capture and scaffolds a starter config. From then on, `publiminer ui` (or `publiminer run`) just launches.
 
-1. **Config** — set your PubMed query, date range, and output directory, then click **Save YAML**
-2. **Run** — click **Run pipeline**; watch the live progress bar
+<details>
+<summary><b>🔧 Install <code>uv</code> first (one-time, per machine)</b></summary>
+
+`uv` is a fast, cross-platform Python package manager from Astral. If you already have it, skip this.
+
+**macOS / Linux:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows (PowerShell):**
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Close and reopen your terminal so `uv` is on PATH, then run the one-liner above.
+
+</details>
+
+<details>
+<summary><b>🔑 How to get an NCBI API key (optional, takes ~2 min)</b></summary>
+
+An API key raises your rate limit from **3 → 10 requests per second** (≈3× faster on large corpora).
+
+1. Go to <https://account.ncbi.nlm.nih.gov/settings/>
+2. Sign in with Google, ORCID, or your NCBI username
+3. Scroll to **API Key Management** → click **Create an API Key**
+4. Copy the key (looks like `abc123def456…`) and paste it into the wizard when prompted
+
+The wizard writes it to `.env` in your working directory and adds `.env` to `.gitignore` automatically. You can also skip and add it later by running `publiminer setup` again.
+
+</details>
+
+<details>
+<summary><b>🖱️ No-code users — what the UI gives you</b></summary>
+
+After `publiminer ui` launches and you finish the wizard, the browser opens a 4-tab interface:
+
+1. **Configure** — edit your PubMed query, date range, and pipeline steps. Click **Save YAML**
+2. **Run** — execute the pipeline; watch the live progress bar
 3. **Explore** — filter by year / language / publication status, sample papers (first-N, random, or every Xth), download as XLSX or JSON
 4. **Status** — total papers in corpus, file size, schema
 
-Optional: put your NCBI API key in a `.env` file (raises rate limit 3 → 10 req/sec):
-```bash
-echo NCBI_API_KEY=your_key > .env
-```
+Re-run the wizard any time with `publiminer setup --force` to change credentials or re-scaffold.
 
 </details>
 
@@ -102,18 +133,15 @@ echo NCBI_API_KEY=your_key > .env
 <summary><b>⌨️ Developers — CLI + Python API</b></summary>
 
 ```bash
-pip install publiminer                    # core only
-pip install "publiminer[all]"             # + UI + viz + rag + dev tools
-```
-
-Run via CLI:
-```bash
+publiminer setup                                      # interactive first-run wizard
 publiminer run --config publiminer.yaml               # full pipeline
 publiminer run --steps parse,deduplicate              # specific steps
 publiminer status --output output                     # corpus summary
 publiminer inspect parse --output output              # step metadata
 publiminer import-legacy /path/to/batches --output output   # idempotent import
 ```
+
+Skip the auto-wizard in scripts with `--no-setup` or `PUBLIMINER_NO_WIZARD=1`.
 
 Use as a library:
 ```python
@@ -131,6 +159,24 @@ cd PubLiMiner
 uv sync --all-extras
 uv run pytest                             # run tests
 uv run publiminer ui                      # launch UI from the checkout
+```
+
+</details>
+
+<details>
+<summary><b>🧪 Alternate install paths (pip, pipx, uvx)</b></summary>
+
+If you don't want to adopt `uv`, the same package works via pip and pipx. The wizard runs on first launch regardless.
+
+```bash
+# pip in your current venv — simplest, works anywhere Python exists
+pip install "publiminer[ui]" && publiminer ui
+
+# pipx — isolates into its own managed env
+pipx install "publiminer[ui]" && publiminer ui
+
+# uvx — ephemeral one-shot run, no persistent install (good for demos)
+uvx --from "publiminer[ui]" publiminer ui
 ```
 
 </details>

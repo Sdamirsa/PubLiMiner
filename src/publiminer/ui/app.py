@@ -358,6 +358,20 @@ def get_step_logs(output_dir: str) -> list[dict]:
     return out
 
 
+# ── First-run wizard gate ───────────────────────────────────────────
+# If .env is missing (or incomplete) AND the user hasn't opted out via
+# PUBLIMINER_NO_WIZARD=1, render the interactive wizard instead of the
+# main tabs. The wizard writes .env and triggers st.rerun() when done,
+# falling through to the normal UI on the next render pass.
+from publiminer.commands.setup import env_is_complete  # noqa: E402
+
+_bypass_wizard = os.environ.get("PUBLIMINER_NO_WIZARD", "").strip() in ("1", "true", "yes")
+if not _bypass_wizard and not env_is_complete():
+    from publiminer.ui.setup_panel import render_setup_wizard  # noqa: E402
+
+    render_setup_wizard()
+    st.stop()  # halt rendering — the wizard owns the page until complete
+
 # ── Page setup ──────────────────────────────────────────────────────
 st.set_page_config(page_title="PubLiMiner", layout="wide", page_icon="📚")
 st.title("📚 PubLiMiner Control Panel")

@@ -1,0 +1,48 @@
+# PubLiMiner starter config — scaffolded by `publiminer setup`.
+#
+# Edit the fields below to match your research question. The defaults
+# run a small "diabetes AND machine learning" fetch for 2024 so you can
+# sanity-check the pipeline end-to-end in ~2 minutes.
+#
+# Secrets (NCBI API key, email) live in .env next to this file — never
+# commit this YAML with credentials pasted in.
+#
+# Full reference: https://github.com/sdamirsa/PubLiMiner/blob/main/docs/architecture.md
+
+general:
+  output_dir: output
+  log_level: INFO
+  on_error: skip            # or "fail" to stop on first error
+  max_error_rate: 0.05
+  seed: 42
+
+cache:
+  ttl_days: 90              # PubMed XML cache (SQLite) retention
+
+# Pipeline steps to run, in order. Only fetch/parse/deduplicate are
+# implemented today; the rest are scaffolded and will fail at runtime.
+steps:
+  - fetch
+  - parse
+  - deduplicate
+
+fetch:
+  query: "diabetes AND machine learning"
+  start_date: "2024/01/01"
+  end_date: "2024/12/31"
+  # email + api_key are loaded from .env via `publiminer setup`
+  # You can override them here, but .env is the recommended home.
+  email: ""
+  api_key: ""
+  max_results: 100          # 0 = no cap; use date ranges for large queries
+  batch_size: 500
+
+parse:
+  prepare_llm_input: true
+  flag_exclusions: true
+
+deduplicate:
+  check_doi: true
+  check_title_fuzzy: true
+  fuzzy_threshold: 90       # 0-100; lower = more aggressive
+  remove_retracted: true
