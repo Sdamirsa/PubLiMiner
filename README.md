@@ -2,10 +2,10 @@
 
 > Publication Literature Miner — fetch, parse, deduplicate, embed, cluster, and extract structured data from PubMed at scale.
 
-[![PyPI](https://img.shields.io/pypi/v/publiminer.svg)](https://pypi.org/project/publiminer/)
-[![Python](https://img.shields.io/pypi/pyversions/publiminer.svg)](https://pypi.org/project/publiminer/)
+[![PyPI](https://img.shields.io/pypi/v/publiminer?color=blue)](https://pypi.org/project/publiminer/)
+[![Python](https://img.shields.io/pypi/pyversions/publiminer?color=blue)](https://pypi.org/project/publiminer/)
 [![CI](https://github.com/sdamirsa/PubLiMiner/actions/workflows/ci.yml/badge.svg)](https://github.com/sdamirsa/PubLiMiner/actions/workflows/ci.yml)
-[![DOI](https://zenodo.org/badge/1157964515.svg)](https://doi.org/10.5281/zenodo.19632815)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19632815.svg)](https://doi.org/10.5281/zenodo.19632815)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/sdamirsa/PubLiMiner/blob/main/LICENSE)
 
 PubLiMiner is a modular Python pipeline for mining biomedical literature from PubMed. It is designed for **200K+ paper corpora** with monthly incremental updates, a single Parquet file as the source of truth, and pluggable steps for embedding, clustering, and LLM-based structured extraction.
