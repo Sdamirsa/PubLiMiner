@@ -72,85 +72,68 @@ graph TB
 - **Memory-bounded** — fetch streams in 5 MB batches, merge uses pyarrow row groups (~50 MB cap)
 - **Binary bisection + PMID-list fallback** — handles PubMed's 10k pagination limit automatically
 
-## Installation
+## Getting started
 
-Requires **Python 3.11+**.
+Requires **Python 3.11+**. Pick the path that matches how you want to use it.
 
-```bash
-pip install publiminer              # core CLI + Python API
-pip install "publiminer[ui]"        # + Streamlit UI
-pip install "publiminer[all]"       # everything (UI + viz + rag + dev)
-```
-
-After install, launch the UI with a single command:
+<details>
+<summary><b>🖱️ No-code users — click through a UI (recommended for first time)</b></summary>
 
 ```bash
+pip install "publiminer[ui]"
 publiminer ui
 ```
 
-Or use the Python API directly in a notebook/script:
+The browser opens to a 4-tab interface:
 
+1. **Config** — set your PubMed query, date range, and output directory, then click **Save YAML**
+2. **Run** — click **Run pipeline**; watch the live progress bar
+3. **Explore** — filter by year / language / publication status, sample papers (first-N, random, or every Xth), download as XLSX or JSON
+4. **Status** — total papers in corpus, file size, schema
+
+Optional: put your NCBI API key in a `.env` file (raises rate limit 3 → 10 req/sec):
+```bash
+echo NCBI_API_KEY=your_key > .env
+```
+
+</details>
+
+<details>
+<summary><b>⌨️ Developers — CLI + Python API</b></summary>
+
+```bash
+pip install publiminer                    # core only
+pip install "publiminer[all]"             # + UI + viz + rag + dev tools
+```
+
+Run via CLI:
+```bash
+publiminer run --config publiminer.yaml               # full pipeline
+publiminer run --steps parse,deduplicate              # specific steps
+publiminer status --output output                     # corpus summary
+publiminer inspect parse --output output              # step metadata
+publiminer import-legacy /path/to/batches --output output   # idempotent import
+```
+
+Use as a library:
 ```python
 from publiminer import FetchStep, ParseStep, DeduplicateStep, Spine, GlobalConfig
 
-cfg = GlobalConfig()  # loads defaults; override via publiminer.yaml or kwargs
+cfg = GlobalConfig()                      # loads publiminer.yaml + defaults
 spine = Spine("output")
 print(spine.count(), "papers currently in spine")
 ```
 
-### Installing from source (for contributors)
-
+From source (for contributors):
 ```bash
 git clone https://github.com/sdamirsa/PubLiMiner.git
 cd PubLiMiner
-uv sync --all-extras    # or: pip install -e ".[all]"
+uv sync --all-extras
+uv run pytest                             # run tests
+uv run publiminer ui                      # launch UI from the checkout
 ```
 
-## Quick start
-
-### 1. Configure
-
-Copy the example env and edit:
-
-```bash
-cp .env.example .env
-# Edit .env and set NCBI_API_KEY (optional, raises rate limit to 10 req/sec)
-```
-
-Then either edit `publiminer.yaml` directly, or use the UI (recommended for first-time users):
-
-```bash
-# Windows
-run_ui.bat
-# Or any platform
-python -m streamlit run src/publiminer/ui/app.py
-```
-
-The UI lets you set query, dates, output dir, and step parameters, then save the YAML and run the pipeline with a live progress bar.
-
-### 2. Run via CLI
-
-```bash
-# Fetch + parse + deduplicate using publiminer.yaml
-publiminer run --config publiminer.yaml
-
-# Run a subset of steps
-publiminer run --steps parse,deduplicate --output output
-
-# Inspect current state
-publiminer status --output output
-publiminer inspect parse --output output
-```
-
-### 3. Import legacy data
-
-If you already have PubMed data in the format produced by the [AI-in-Med-Trend](https://github.com/sdamirsa/AI-in-Med-Trend) pipeline:
-
-```bash
-publiminer import-legacy /path/to/pubmed_batch_files --output output
-```
-
-The import is **idempotent** — running it twice on the same files adds zero new rows.
+</details>
 
 ## Project layout
 
