@@ -12,7 +12,13 @@ import logging
 from collections import defaultdict
 
 import polars as pl
-from thefuzz import fuzz
+import pyarrow.parquet as pq
+
+# rapidfuzz is a drop-in replacement for thefuzz with the same API. Chosen for
+# ~3x faster cdist on our workloads (see .claude/research-doc/deduplicate.md §3).
+# Modern thefuzz >=0.20 internally delegates to rapidfuzz anyway; depending on
+# it directly removes the shim.
+from rapidfuzz import fuzz
 
 from publiminer.core.base_step import StepBase
 from publiminer.core.config import GlobalConfig
@@ -152,25 +158,67 @@ class DeduplicateStep(StepBase):
                 del remaining
             del title_df
 
-        # Layer 4: Retracted papers (projected read: pmid + publication_status).
+        # Layer 4: Retracted papers.
+        # Primary signal: parse's canonical `is_retracted` boolean
+        # (unified_arch_and_steps.md §2). Falls back to string-matching
+        # `publication_status` when the column is missing (older parquets
+        # parsed before the is_retracted field existed).
+        # Also drops retraction-notice rows via `retraction_of_pmid` so the
+        # notice doesn't linger after its target is removed.
         if self.config.remove_retracted:
-            ret_df = self.spine.read(columns=["pmid", "publication_status"])
-            if "publication_status" in ret_df.columns:
-                with ProgressReporter("dedup_retracted", total=1, desc="Layer 4/4: Retracted") as p:
+            # Probe schema via footer only (O(1) metadata read, not a full
+            # parquet scan like `spine.inspect` would trigger).
+            schema_names = set(
+                pq.ParquetFile(self.spine.parquet_path).schema_arrow.names
+            )
+            ret_cols = ["pmid"]
+            if "is_retracted" in schema_names:
+                ret_cols.append("is_retracted")
+            if "retraction_of_pmid" in schema_names:
+                ret_cols.append("retraction_of_pmid")
+            if "publication_status" in schema_names:
+                ret_cols.append("publication_status")
+            ret_df = self.spine.read(columns=ret_cols)
+            with ProgressReporter("dedup_retracted", total=1, desc="Layer 4/4: Retracted") as p:
+                if "is_retracted" in ret_df.columns:
+                    retracted_mask = pl.col("is_retracted") == True  # noqa: E712
+                elif "publication_status" in ret_df.columns:
                     retracted_mask = (
                         pl.col("publication_status")
                         .str.to_lowercase()
                         .str.contains(r"\bretracted?\b")
                     )
-                    retracted = ret_df.filter(retracted_mask)
-                    p.advance()
-                if len(retracted) > 0:
-                    retracted_pmids = retracted["pmid"].to_list()
-                    pmids_to_remove.update(retracted_pmids)
-                    self.logger.info(f"Layer 4: flagged {len(retracted_pmids)} retracted papers")
+                else:
+                    retracted_mask = pl.lit(False)
+                retracted = ret_df.filter(retracted_mask)
+                p.advance()
+            retracted_pmids: list[str] = []
+            if len(retracted) > 0:
+                retracted_pmids = retracted["pmid"].to_list()
+                pmids_to_remove.update(retracted_pmids)
+                removed.extend(
+                    [{"pmid": pmid, "reason": "retracted"} for pmid in retracted_pmids]
+                )
+            # Also remove retraction-notice rows — each points at a PMID the
+            # layer just flagged. Dropping the notice prevents an orphan
+            # "Retraction of 123456" row from polluting downstream output.
+            notice_pmids: list[str] = []
+            if "retraction_of_pmid" in ret_df.columns:
+                notices = ret_df.filter(
+                    pl.col("retraction_of_pmid").is_not_null()
+                    & (pl.col("retraction_of_pmid") != "")
+                )
+                if len(notices) > 0:
+                    notice_pmids = notices["pmid"].to_list()
+                    pmids_to_remove.update(notice_pmids)
                     removed.extend(
-                        [{"pmid": pmid, "reason": "retracted"} for pmid in retracted_pmids]
+                        [{"pmid": pmid, "reason": "retraction_notice"} for pmid in notice_pmids]
                     )
+            if retracted_pmids or notice_pmids:
+                self.logger.info(
+                    f"Layer 4: flagged {len(retracted_pmids)} retracted + "
+                    f"{len(notice_pmids)} retraction-notice papers"
+                )
             del ret_df
 
         # CRITICAL: do NOT replace this with `self.spine.write(df)`. The dedup
@@ -192,6 +240,9 @@ class DeduplicateStep(StepBase):
             [r for r in removed if r["reason"] == "fuzzy_title_duplicate"]
         )
         meta.extra["retracted"] = len([r for r in removed if r["reason"] == "retracted"])
+        meta.extra["retraction_notices"] = len(
+            [r for r in removed if r["reason"] == "retraction_notice"]
+        )
 
         self.logger.info(
             f"Deduplication complete: {meta.rows_before} -> {rows_after} rows "

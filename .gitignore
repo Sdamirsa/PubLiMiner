@@ -234,3 +234,4 @@ publiminer.local.yaml
 # OS
 Thumbs.db
 desktop.ini
+main/cache/cache.db-journal

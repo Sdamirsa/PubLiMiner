@@ -125,13 +125,96 @@ def _parse_pubmed_article(article_elem: ET.Element) -> dict[str, Any]:
         journal = _extract_journal_info(medline)
         if journal:
             article["journal"] = journal
+        # Retraction + preprint flags (canonical per unified_arch_and_steps.md §2).
+        # Computed here so downstream dedup can filter on `is_retracted` directly
+        # instead of string-matching `publication_status`.
+        article["is_retracted"] = _detect_retracted(medline, article.get("publication_types", []))
+        retr_of = _detect_retraction_of(medline)
+        if retr_of:
+            article["retraction_of_pmid"] = retr_of
+        article["is_preprint"] = _detect_preprint(article_elem, article.get("publication_types", []))
 
     # PubmedData (DOI, article IDs, history)
     pubmed_data = article_elem.find(".//PubmedData")
     if pubmed_data is not None:
         article.update(_extract_pubmed_data(pubmed_data))
 
+    # DOI normalization (canonical per unified_arch_and_steps.md §2).
+    # Parse is the single place this happens so dedup, score, patent, and export
+    # all compare normalized values without each re-implementing the rules.
+    if "doi" in article and article["doi"]:
+        article["doi"] = _normalize_doi(article["doi"])
+
     return article
+
+
+def _detect_retracted(medline: ET.Element, pub_types: list) -> bool:
+    """True if this article is itself retracted.
+
+    Sources (any one is sufficient):
+    - PublicationType "Retracted Publication"
+    - CommentsCorrections RefType "RetractionIn" / "PartialRetractionIn"
+      (a forward pointer from the article to its retraction notice)
+    """
+    for pt in pub_types:
+        name = pt.get("type", "") if isinstance(pt, dict) else str(pt)
+        if name == "Retracted Publication":
+            return True
+    for ref_type in ("RetractionIn", "PartialRetractionIn"):
+        if medline.find(f".//CommentsCorrections[@RefType='{ref_type}']") is not None:
+            return True
+    return False
+
+
+def _detect_retraction_of(medline: ET.Element) -> str:
+    """Return the PMID this article retracts, or empty string.
+
+    Non-empty only on retraction-notice rows (i.e. the article IS a retraction
+    notice pointing at the article it retracts). Used by dedup to drop both
+    the retracted article and its notice together.
+    """
+    cc = medline.find(".//CommentsCorrections[@RefType='RetractionOf']")
+    if cc is None:
+        return ""
+    pmid_elem = cc.find("./PMID")
+    if pmid_elem is not None and pmid_elem.text:
+        return pmid_elem.text.strip()
+    return ""
+
+
+def _detect_preprint(article_elem: ET.Element, pub_types: list) -> bool:
+    """True if this is a preprint record.
+
+    Sources:
+    - PublicationType "Preprint"
+    - Article[@PubModel='Preprint']
+    - DOI starting with '10.1101/' (bioRxiv/medRxiv)
+    """
+    for pt in pub_types:
+        name = pt.get("type", "") if isinstance(pt, dict) else str(pt)
+        if name == "Preprint":
+            return True
+    article_inner = article_elem.find(".//Article")
+    if article_inner is not None and article_inner.get("PubModel", "") == "Preprint":
+        return True
+    return False
+
+
+def _normalize_doi(doi: str) -> str:
+    """Lowercase, strip prefixes, and trim trailing punctuation.
+
+    Canonicalization rules come from the DOI Foundation (case-insensitive) and
+    Crossref's recommended display form.
+    """
+    d = doi.strip().lower()
+    # Strip common prefixes
+    for prefix in ("doi:", "https://doi.org/", "http://doi.org/",
+                   "https://dx.doi.org/", "http://dx.doi.org/"):
+        if d.startswith(prefix):
+            d = d[len(prefix):]
+            break
+    # Strip trailing junk that occasionally sneaks in from HTML scraping
+    return d.rstrip(".;,) /")
 
 
 def _extract_article_info(medline: ET.Element) -> dict[str, Any]:

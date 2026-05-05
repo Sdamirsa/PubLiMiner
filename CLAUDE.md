@@ -5,6 +5,8 @@
 A Python library for mining PubMed literature: fetch papers via PubMed API, parse XML, deduplicate, embed, cluster, extract structured data with LLMs, score, detect trends, and export results. Designed for 200K+ papers with monthly incremental updates.
 
 Full architecture: `.claude/PubLiMiner_Architecture.md`
+**Authoritative step contracts, defaults, and invariants: `.claude/research-doc/unified_arch_and_steps.md`.**
+Per-step research background: `.claude/research-doc/<step>.md` (fetch, parse, deduplicate, embed, reduce, cluster, sample, extract, score, trend, rag, patent, export).
 
 ## Tech Stack
 
@@ -14,7 +16,7 @@ Full architecture: `.claude/PubLiMiner_Architecture.md`
 - **httpx** — HTTP client (sync for PubMed, async for LLM APIs)
 - **lxml** / **xml.etree.ElementTree** — XML parsing
 - **Typer + Rich** — CLI
-- **thefuzz** — Fuzzy title matching for deduplication
+- **rapidfuzz** — Fuzzy title matching for deduplication (target per unified spec; `pyproject.toml` currently still pins `thefuzz` — migration is a followup task, see `unified_arch_and_steps.md` §8)
 - **scikit-learn / hdbscan** — Clustering
 - **Jinja2** — Prompt templates for LLM extraction
 

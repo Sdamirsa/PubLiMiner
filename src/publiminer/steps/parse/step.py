@@ -40,9 +40,10 @@ class ParseStep(StepBase):
     """Parse raw PubMed XML into structured columns.
 
     Reads: pmid, raw_xml
-    Writes: title, abstract, authors, journal, year, doi, pub_type,
+    Writes: title, abstract, authors, journal, year, month, doi, pub_type,
             mesh_terms, keywords, language, grants, publication_status,
-            article_ids, llm_input, exclude_flag, exclude_reason
+            article_ids, is_retracted, retraction_of_pmid, is_preprint,
+            llm_input, exclude_flag, exclude_reason
     """
 
     name = "parse"
@@ -199,6 +200,7 @@ def _article_to_flat_row(article: dict, pmid: str, config: ParseConfig) -> dict:
         "authors": json.dumps(article.get("authors", []), ensure_ascii=False),
         "journal": json.dumps(article.get("journal", {}), ensure_ascii=False),
         "year": year,
+        "month": pub_date.get("month") if isinstance(pub_date.get("month"), int) else None,
         "doi": article.get("doi", ""),
         "pub_type": json.dumps(article.get("publication_types", []), ensure_ascii=False),
         "mesh_terms": json.dumps(article.get("mesh_headings", []), ensure_ascii=False),
@@ -207,6 +209,12 @@ def _article_to_flat_row(article: dict, pmid: str, config: ParseConfig) -> dict:
         "grants": json.dumps(article.get("grants", []), ensure_ascii=False),
         "publication_status": article.get("publication_status", ""),
         "article_ids": json.dumps(article.get("article_ids", []), ensure_ascii=False),
+        # Canonical retraction / preprint flags (unified_arch_and_steps.md §2).
+        # Written as scalar bools so dedup / downstream filters don't have to
+        # string-match against publication_status.
+        "is_retracted": bool(article.get("is_retracted", False)),
+        "retraction_of_pmid": article.get("retraction_of_pmid", "") or "",
+        "is_preprint": bool(article.get("is_preprint", False)),
     }
 
     # LLM input preparation
