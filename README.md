@@ -23,14 +23,36 @@ PubLiMiner is a modular Python pipeline for mining biomedical literature from Pu
 
 ## Pipeline overview
 
-```
-fetch → parse → deduplicate → embed → reduce (optional)
-                                ├→ cluster → sample → extract → score → trend
-                                ├→ rag
-                                └→ export ← trend, patent
+```mermaid
+graph LR
+    FETCH["fetch\nPubMed → raw XML"]
+    PARSE["parse\nXML → fields"]
+    DEDUP["deduplicate\n4-layer dedup"]
+    FILTER["filter\nkeyword tag"]
+    EXTRACT["extract\nLLM → structured JSON"]
+    EMBED["embed\nfuture"]
+    CLUSTER["cluster\nfuture"]
+    SCORE["score\nfuture"]
+    TREND["trend\nfuture"]
+    EXPORT["export\nfuture"]
+
+    FETCH --> PARSE --> DEDUP --> FILTER --> EXTRACT
+    DEDUP --> EMBED --> CLUSTER --> SCORE --> TREND --> EXPORT
+
+    style FETCH   fill:#2d6a4f,color:#fff
+    style PARSE   fill:#2d6a4f,color:#fff
+    style DEDUP   fill:#2d6a4f,color:#fff
+    style FILTER  fill:#2d6a4f,color:#fff
+    style EXTRACT fill:#2d6a4f,color:#fff
+    style EMBED   fill:#6c757d,color:#fff
+    style CLUSTER fill:#6c757d,color:#fff
+    style SCORE   fill:#6c757d,color:#fff
+    style TREND   fill:#6c757d,color:#fff
+    style EXPORT  fill:#6c757d,color:#fff
 ```
 
-Currently implemented: **fetch**, **parse**, **deduplicate**. The remaining steps are scaffolded in the architecture and being added incrementally.
+**Implemented (green):** fetch, parse, deduplicate, filter, extract  
+**Planned (grey):** embed, cluster, score, trend, export
 
 ## Architecture
 
@@ -38,32 +60,44 @@ Currently implemented: **fetch**, **parse**, **deduplicate**. The remaining step
 
 ```mermaid
 graph TB
-    subgraph User Interface
+    subgraph "User Interface"
         CLI["CLI: publiminer run/status/inspect/ui"]
         UI["Streamlit UI: publiminer ui"]
     end
 
-    subgraph Pipeline
-        FETCH["FetchStep<br/>PubMed API → raw XML"]
-        PARSE["ParseStep<br/>XML → structured fields"]
-        DEDUP["DeduplicateStep<br/>4-layer dedup"]
+    subgraph "Pipeline Steps"
+        FETCH["FetchStep\nPubMed API → raw XML"]
+        PARSE["ParseStep\nXML → structured fields"]
+        DEDUP["DeduplicateStep\n4-layer dedup"]
+        FILTER["FilterStep\nkeyword affiliation tagging"]
+        EXTRACT["ExtractStep\nasync LLM extraction"]
     end
 
-    subgraph Data Layer
-        SPINE["Spine"]
-        PARQUET["papers.parquet<br/>(source of truth)"]
-        STAGING["papers.parquet.staging<br/>(crash checkpoint)"]
-        CACHE["SQLite cache<br/>(raw API responses)"]
+    subgraph "Data Layer"
+        SPINE["Spine (core/spine.py)"]
+        PARQUET["papers.parquet\n(source of truth)"]
+        STAGING["papers.parquet.staging\n(crash checkpoint)"]
+        CACHE["cache.db\n(raw API responses)"]
+        EXTDB["extractions.db\n(LLM results + audit trail)"]
     end
 
-    CLI --> FETCH --> PARSE --> DEDUP
+    subgraph "External APIs"
+        PUBMED["PubMed E-utilities"]
+        OPENROUTER["OpenRouter\n/api/v1/chat/completions"]
+    end
+
     UI --> CLI
+    CLI --> FETCH --> PARSE --> DEDUP --> FILTER --> EXTRACT
     FETCH --> SPINE
     PARSE --> SPINE
     DEDUP --> SPINE
+    FILTER --> SPINE
     SPINE --> PARQUET
     SPINE --> STAGING
     FETCH --> CACHE
+    FETCH --> PUBMED
+    EXTRACT --> EXTDB
+    EXTRACT --> OPENROUTER
 ```
 
 **Key design decisions:**
@@ -72,6 +106,7 @@ graph TB
 - **Incremental parse** — only processes rows where `title IS NULL`
 - **Memory-bounded** — fetch streams in 5 MB batches, merge uses pyarrow row groups (~50 MB cap)
 - **Binary bisection + PMID-list fallback** — handles PubMed's 10k pagination limit automatically
+- **extractions.db** stores LLM outputs separately, with full audit trail (raw response, repair history, cost, tokens)
 
 ## Getting started
 
@@ -241,6 +276,10 @@ PubLiMiner is designed to be re-run nightly without redoing any work:
 - **Memory**: parse streams in 5K-row batches (~1.5 GB peak on a 500K-row corpus); dedup reads only the columns it needs per layer (~1 GB peak). The only step that loads the full parquet is the final `add_columns` write after parse, which spikes to ~3–5 GB transiently depending on corpus size
 - **Parquet format**: files are written with zstd-3 compression and 50K-row groups — required for `pyarrow.iter_batches` to actually stream. If you have a pre-v0.1.x parquet written with snappy and large row groups, run `uv run python scripts/migrate_parquet.py` once to re-chunk it
 - **Disk**: keep at least 2× your final parquet size free for atomic writes
+
+## Running experiments
+
+See [RUNBOOK.md](https://github.com/sdamirsa/PubLiMiner/blob/main/RUNBOOK.md) for a condensed cheat-sheet: run commands, config quick reference, result inspection, troubleshooting, and useful one-liners.
 
 ## Development
 

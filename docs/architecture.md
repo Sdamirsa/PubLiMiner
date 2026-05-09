@@ -58,18 +58,30 @@ graph TB
 
 ```mermaid
 graph LR
-    F["fetch<br/>PubMed → raw XML"] --> P["parse<br/>XML → structured fields"]
-    P --> D["deduplicate<br/>4-layer dedup"]
-    D --> E["embed<br/>(future)"]
-    E --> C["cluster<br/>(future)"]
-    C --> X["extract<br/>(future)"]
+    F["fetch<br/>PubMed → raw XML"]
+    P["parse<br/>XML → structured fields"]
+    D["deduplicate<br/>4-layer dedup"]
+    FL["filter<br/>keyword affiliation tag"]
+    X["extract<br/>async LLM → JSON"]
+    E["embed<br/>(future)"]
+    C["cluster<br/>(future)"]
+    SC["score<br/>(future)"]
+    TR["trend<br/>(future)"]
+    EX["export<br/>(future)"]
 
-    style F fill:#2d6a4f,color:#fff
-    style P fill:#2d6a4f,color:#fff
-    style D fill:#2d6a4f,color:#fff
-    style E fill:#6c757d,color:#fff
-    style C fill:#6c757d,color:#fff
-    style X fill:#6c757d,color:#fff
+    F --> P --> D --> FL --> X
+    D --> E --> C --> SC --> TR --> EX
+
+    style F  fill:#2d6a4f,color:#fff
+    style P  fill:#2d6a4f,color:#fff
+    style D  fill:#2d6a4f,color:#fff
+    style FL fill:#2d6a4f,color:#fff
+    style X  fill:#2d6a4f,color:#fff
+    style E  fill:#6c757d,color:#fff
+    style C  fill:#6c757d,color:#fff
+    style SC fill:#6c757d,color:#fff
+    style TR fill:#6c757d,color:#fff
+    style EX fill:#6c757d,color:#fff
 ```
 
 ## Fetch Step — Detailed Logic

@@ -11,6 +11,7 @@ class GeneralConfig(BaseModel):
     """Top-level general settings."""
 
     output_dir: str = DEFAULT_OUTPUT_DIR
+    project_name: str = ""
     log_level: str = "INFO"
     seed: int = 42
     on_error: str = "skip"  # "skip" or "fail"

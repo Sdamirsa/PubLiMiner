@@ -1,0 +1,252 @@
+general:
+  output_dir: output/cardiac_mri
+  project_name: "Cardiac MRI — European author specialty (2023–2026 pilot)"
+  log_level: INFO
+  on_error: skip
+  max_error_rate: 0.05
+  seed: 42
+
+cache:
+  ttl_days: 365  # long TTL — corpus is historical, queries won't change
+
+steps:
+  - fetch
+  - parse
+  - deduplicate
+  - filter     # geographic post-filter: keep only papers with ≥1 European affiliation
+  - extract    # LLM author specialty classification
+  # TODO (not yet implemented):
+  # - classify  # rule-based specialty classification (alternative to LLM extract)
+
+fetch:
+  # Topic: cardiac / cardiovascular MRI and CMR
+  # PILOT RUN: limited to 2023–2026 to validate pipeline before running the full 2000–2026 corpus
+  # To run the full date range: change start_date to "2000/01/01"
+  query: |
+    (
+      "cardiac MR*"[Title/Abstract] OR
+      "cardiovascular MR*"[Title/Abstract] OR
+      "cardiac magnetic resonance"[Title/Abstract] OR
+      "cardiovascular magnetic resonance"[Title/Abstract] OR
+      "CMR"[Title/Abstract] OR
+      "cardiac MR"[Title/Abstract] OR
+      "heart MRI"[Title/Abstract] OR
+      "cardiac magnetic resonance imaging"[Title/Abstract] OR
+      "cardiovascular magnetic resonance imaging"[Title/Abstract]
+    )
+  start_date: "2025/01/01"   # PILOT: last 3 years — change to 2000/01/01 for full run
+  end_date: "2026/04/30"
+  email: ""          # set PUBMED_EMAIL in .env
+  api_key: ""        # set NCBI_API_KEY in .env (raises rate limit 3→10 req/s)
+  max_results: 0     # 0 = no limit
+  batch_size: 500
+  retry_attempts: 3
+  rate_limit_per_second: 3.0
+  download_mode: full
+  ret_mode: xml
+  ret_type: ""
+
+parse:
+  min_abstract_length: 0
+  language_filter: ""       # no language restriction
+  remove_html: true
+  prepare_llm_input: true
+  flag_exclusions: false
+
+deduplicate:
+  check_doi: true
+  check_title_fuzzy: true
+  fuzzy_threshold: 90
+  remove_retracted: true
+
+filter:
+  # Keep papers with ≥1 author whose affiliation contains a European country/region name.
+  # Matching is case-insensitive substring search across all author affiliation strings.
+  output_column: "is_european"
+  min_author_matches: 1
+  drop_non_matching: false   # tag only — let extract.filter_column do the actual filtering
+  case_sensitive: false
+  keywords:
+    # Country names (English)
+    - "albania"
+    - "andorra"
+    - "austria"
+    - "belarus"
+    - "belgium"
+    - "bosnia"
+    - "bulgaria"
+    - "croatia"
+    - "cyprus"
+    - "czech republic"
+    - "czechia"
+    - "denmark"
+    - "estonia"
+    - "finland"
+    - "france"
+    - "georgia"
+    - "germany"
+    - "greece"
+    - "hungary"
+    - "iceland"
+    - "ireland"
+    - "italy"
+    - "kosovo"
+    - "latvia"
+    - "liechtenstein"
+    - "lithuania"
+    - "luxembourg"
+    - "malta"
+    - "moldova"
+    - "monaco"
+    - "montenegro"
+    - "netherlands"
+    - "north macedonia"
+    - "norway"
+    - "poland"
+    - "portugal"
+    - "romania"
+    - "russia"
+    - "san marino"
+    - "serbia"
+    - "slovakia"
+    - "slovenia"
+    - "spain"
+    - "sweden"
+    - "switzerland"
+    - "turkey"
+    - "ukraine"
+    - "united kingdom"
+    - "england"
+    - "scotland"
+    - "wales"
+    # Common city/region identifiers (avoid false positives from author names)
+    - " berlin"
+    - " munich"
+    - " hamburg"
+    - " cologne"
+    - " frankfurt"
+    - " paris"
+    - " london"
+    - " amsterdam"
+    - " rotterdam"
+    - " madrid"
+    - " barcelona"
+    - " rome"
+    - " milan"
+    - " vienna"
+    - " zurich"
+    - " geneva"
+    - " brussels"
+    - " stockholm"
+    - " oslo"
+    - " copenhagen"
+    - " helsinki"
+    - " warsaw"
+    - " prague"
+    - " budapest"
+    - " bucharest"
+    - " athens"
+    - " lisbon"
+    - " leiden"
+    - " utrecht"
+    - " munich"
+    - " charité"
+    - "charite"
+    # Domain-level catch-all
+    - "europe"
+    - "european"
+
+extract:
+  # v2 schema: relevance enum changed from "Irrelevant" → "NotRelevant" on 2026-05-06.
+  # Old extractions (run_id < 20260506) used "Irrelevant"; visualize_run.py normalizes both.
+  # Bump to cardiac_mri_v3 only if field definitions change structurally (new fields, type change).
+  schema_name: "cardiac_mri_v2"
+  run_id: ""  # auto-generated if empty
+  model: "openai/gpt-oss-120b"
+  fallback_models:
+    - "anthropic/claude-haiku-4-5"
+    - "openai/gpt-4o-mini"
+  max_tokens: 4096
+  temperature: 0.2
+  seed: 42
+  provider:
+    order: []
+    allow_fallbacks: true
+    require_parameters: true
+    data_collection: "deny"
+    sort: "price"
+  include_title: true
+  include_abstract: true
+  include_author_block: true
+  extra_columns:
+    - "pub_type"
+  user_instruction: >
+    You are classifying European cardiac MRI publications for a specialty-gap analysis.
+    Classify study relevance, study design, and author specialties.
+    For author specialty, use ONLY the FIRST listed affiliation for each author.
+    Use only what is explicitly stated — never infer from context.
+    CRITICAL: Return ONLY the exact string values listed for each field. Do not paraphrase, explain, or add any text.
+  fields:
+    - name: relevance
+      type: enum
+      values: ["Main", "Secondary", "NotRelevant"]
+      description: >
+        How central is cardiac MRI/CMR to this paper?
+        Return EXACTLY one of: "Main", "Secondary", or "NotRelevant" — no other text.
+        Main: cardiac MRI is the primary modality, method, or focus (CMR protocol study,
+        cardiac MRI diagnosis, CMR as primary endpoint).
+        Secondary: cardiac MRI is one of several methods used, mentioned in passing, or a secondary tool
+        alongside other dominant imaging modalities.
+        NotRelevant: paper appeared due to keyword match but cardiac MRI is not meaningfully part of the work.
+      required: true
+    - name: study_type
+      type: enum
+      values: ["OriginalResearch", "CaseReportOrSeries", "Review", "SystematicReviewOrMetaAnalysis", "Other"]
+      description: >
+        Study design. Use the pub_type field as a hint where provided.
+        Return EXACTLY one of: "OriginalResearch", "CaseReportOrSeries", "Review", "SystematicReviewOrMetaAnalysis", or "Other" — no other text.
+        OriginalResearch: primary data collection — cohort, RCT, cross-sectional, registry, prospective or retrospective study.
+        CaseReportOrSeries: one or a small series of individual patient cases.
+        Review: narrative literature review without systematic methodology.
+        SystematicReviewOrMetaAnalysis: systematic literature search with PRISMA-style methods; with or without meta-analysis.
+        Other: editorial, commentary, letter, erratum, conference abstract, technical note, or unclear design.
+      required: true
+    - name: first_author_specialty
+      type: enum
+      values: ["Radiology", "Cardiology", "Unclear"]
+      description: >
+        Specialty of the first author inferred from their FIRST listed affiliation ONLY.
+        Return EXACTLY one of: "Radiology", "Cardiology", or "Unclear" — no other text.
+        Radiology: department of radiology, radiodiagnostics, diagnostic imaging, radiological sciences,
+        medical imaging, radiology and nuclear medicine.
+        Cardiology: cardiology department, cardiovascular medicine, cardiac center, heart center,
+        cardiovascular center, department of cardiology.
+        Unclear: nuclear medicine only, mixed departments, no affiliation listed, or affiliation does not
+        clearly indicate radiology or cardiology.
+      required: true
+    - name: last_author_specialty
+      type: enum
+      values: ["Radiology", "Cardiology", "Unclear"]
+      description: >
+        Specialty of the last author inferred from their FIRST listed affiliation ONLY.
+        Return EXACTLY one of: "Radiology", "Cardiology", or "Unclear" — no other text.
+        Apply the same classification rules as for first_author_specialty.
+        If there is only one author, use the same value as first_author_specialty.
+      required: true
+    - name: corresponding_author_specialty
+      type: enum
+      values: ["Radiology", "Cardiology", "Unclear", "NotReported"]
+      description: >
+        Specialty of the corresponding author (marked with * in affiliations or "Corresponding (*):" label).
+        Return EXACTLY one of: "Radiology", "Cardiology", "Unclear", or "NotReported" — no other text.
+        Use ONLY their FIRST listed affiliation. Apply the same Radiology/Cardiology/Unclear rules.
+        NotReported: no corresponding author is identified in the author block.
+        If the corresponding author is the same person as the first or last author, still classify their specialty.
+      required: true
+  repair:
+    pattern_fix: true
+    llm_fix: true
+    fix_model: ""
+  filter_column: "is_european"   # only extract papers tagged by the filter step
+  max_cost_usd: 50.0
+  concurrency: 20

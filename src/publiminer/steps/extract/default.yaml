@@ -1,0 +1,45 @@
+schema_name: ""
+run_id: ""
+model: "openai/gpt-oss-120b"
+fallback_models:
+  - "anthropic/claude-haiku-4-5"
+  - "openai/gpt-4o-mini"
+max_tokens: 2048
+temperature: 0.0
+seed: 42
+
+provider:
+  order: []
+  allow_fallbacks: true
+  require_parameters: true
+  data_collection: "deny"
+  sort: "price"
+
+reasoning:
+  enabled: false
+  effort: "medium"
+  exclude: false
+
+include_title: true
+include_abstract: true
+include_author_block: true
+extra_columns: []
+user_instruction: ""
+
+# Define extraction fields here. Each field requires:
+#   name: unique identifier (snake_case)
+#   type: string | integer | float | boolean | enum | list[string] | list[integer] | object | list[object]
+#   description: what to extract and how to handle ambiguity
+#   required: true | false  (default: true)
+#   parent: name of parent field for nested objects (omit for top-level)
+#   values: list of allowed values (only for enum type)
+fields: []
+
+repair:
+  pattern_fix: true
+  llm_fix: true
+  fix_model: ""
+
+filter_column: ""
+max_cost_usd: 25.0
+concurrency: 20

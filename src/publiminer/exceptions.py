@@ -39,3 +39,28 @@ class SpineError(PubLiMinerError):
 
 class ValidationError(PubLiMinerError):
     """Data validation error."""
+
+
+class OpenRouterError(PubLiMinerError):
+    """OpenRouter API error."""
+
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        self.status_code = status_code
+        super().__init__(message)
+
+
+class InsufficientCreditsError(OpenRouterError):
+    """OpenRouter account has insufficient credits (HTTP 402)."""
+
+
+class NoProviderError(OpenRouterError):
+    """No OpenRouter provider available for the requested model/params (HTTP 503)."""
+
+
+class CostCapExceededError(PubLiMinerError):
+    """Extraction halted because max_cost_usd was reached."""
+
+    def __init__(self, cap: float, actual: float) -> None:
+        self.cap = cap
+        self.actual = actual
+        super().__init__(f"Cost cap ${cap:.4f} exceeded (actual ${actual:.4f}); extraction halted")

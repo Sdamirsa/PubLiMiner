@@ -44,6 +44,12 @@ class ParseStep(StepBase):
             mesh_terms, keywords, language, grants, publication_status,
             article_ids, is_retracted, retraction_of_pmid, is_preprint,
             llm_input, exclude_flag, exclude_reason
+
+    authors column: JSON array of author dicts with keys last_name, fore_name,
+    initials, affiliation, is_corresponding (bool), equal_contribution (bool).
+    is_corresponding is set from the PubMed "Electronic address:" marker;
+    equal_contribution is set from the contrib-type attribute in the XML.
+    Both flags are consumed by steps/extract/author_mapper.py.
     """
 
     name = "parse"

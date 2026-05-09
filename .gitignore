@@ -235,3 +235,6 @@ publiminer.local.yaml
 Thumbs.db
 desktop.ini
 main/cache/cache.db-journal
+
+# PI report script — personal/project-specific, not for public repo
+scripts/generate_pi_report.py

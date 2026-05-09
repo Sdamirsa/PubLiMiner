@@ -42,7 +42,7 @@ ALL_STEPS = [
     "patent",
     "export",
 ]
-IMPLEMENTED_STEPS = {"fetch", "parse", "deduplicate"}
+IMPLEMENTED_STEPS = {"fetch", "parse", "deduplicate", "filter", "extract"}
 
 # Columns shown by default in the explore preview table — small, displayable.
 # Excludes raw_xml (huge), abstract (long), and JSON columns (authors, mesh,
@@ -96,6 +96,33 @@ def default_config() -> dict:
             "check_title_fuzzy": True,
             "fuzzy_threshold": 90,
             "remove_retracted": True,
+        },
+        "extract": {
+            "schema_name": "",
+            "run_id": "",
+            "model": "openai/gpt-oss-120b",
+            "fallback_models": ["anthropic/claude-haiku-4-5", "openai/gpt-4o-mini"],
+            "max_tokens": 2048,
+            "temperature": 0.0,
+            "seed": 42,
+            "provider": {
+                "order": [],
+                "allow_fallbacks": True,
+                "require_parameters": True,
+                "data_collection": "deny",
+                "sort": "price",
+            },
+            "reasoning": {"enabled": False, "effort": "medium", "exclude": False},
+            "include_title": True,
+            "include_abstract": True,
+            "include_author_block": True,
+            "extra_columns": [],
+            "user_instruction": "",
+            "fields": [],
+            "repair": {"pattern_fix": True, "llm_fix": True, "fix_model": ""},
+            "filter_column": "",
+            "max_cost_usd": 25.0,
+            "concurrency": 20,
         },
     }
 
@@ -404,8 +431,8 @@ if "cfg" not in st.session_state:
 cfg = st.session_state["cfg"]
 
 # ── Tabs ────────────────────────────────────────────────────────────
-tab_config, tab_run, tab_explore, tab_status = st.tabs(
-    ["⚙️ Configure", "▶️ Run", "🔍 Explore", "📊 Status"]
+tab_config, tab_run, tab_explore, tab_status, tab_extractions = st.tabs(
+    ["⚙️ Configure", "▶️ Run", "🔍 Explore", "📊 Status", "🧪 Extractions"]
 )
 
 # ─────────────── CONFIGURE TAB ──────────────────────────────────────
@@ -886,6 +913,84 @@ with tab_status:
             else:
                 st.dataframe(preview_df.to_pandas(), width="stretch")
                 st.caption("Use the **🔍 Explore** tab for filtered samples and exports.")
+
+# ─────────────── EXTRACTIONS TAB ────────────────────────────────────
+with tab_extractions:
+    st.subheader("🧪 LLM Extractions")
+    _ext_db_path = Path(cfg["general"]["output_dir"]) / "extractions.db"
+
+    if not _ext_db_path.exists():
+        st.info(
+            "No `extractions.db` found. Run the pipeline with an **extract** step configured "
+            "to populate this tab."
+        )
+    else:
+        from publiminer.core.extraction_db import ExtractionDB as _ExtDB
+
+        _db = _ExtDB(_ext_db_path)
+        _schemas = _db.list_schemas()
+
+        if not _schemas:
+            st.info("No extractions found in database yet.")
+        else:
+            import sqlite3 as _sqlite3
+
+            _schema_sel = st.selectbox("Schema", _schemas, key="ext_schema")
+            _runs = _db.list_runs(_schema_sel)
+            _run_sel = st.selectbox("Run ID", _runs, key="ext_run") if _runs else None
+
+            if _run_sel:
+                _summary = _db.get_summary(_schema_sel, _run_sel)
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Success", _summary.get("n_success", 0))
+                c2.metric("Failed", _summary.get("n_failed", 0))
+                c3.metric("Repaired", _summary.get("n_repaired", 0))
+                c4.metric("Total cost (USD)", f"${_summary.get('total_cost_usd', 0.0):.4f}")
+
+                st.divider()
+
+                # Results table (preview — first 200 rows)
+                with st.expander("Results preview (first 200)", expanded=True):
+                    _conn = _sqlite3.connect(_ext_db_path)
+                    _rows = _conn.execute(
+                        """
+                        SELECT pmid, extracted_json, model_used, provider_used,
+                               cost_usd, fix_applied, error_label, created_at
+                        FROM extractions
+                        WHERE schema_name=? AND run_id=?
+                        ORDER BY pmid
+                        LIMIT 200
+                        """,
+                        (_schema_sel, _run_sel),
+                    ).fetchall()
+                    _conn.close()
+                    if _rows:
+                        import pandas as _pd
+                        _preview_df = _pd.DataFrame(
+                            _rows,
+                            columns=["pmid", "extracted_json", "model_used", "provider_used",
+                                     "cost_usd", "fix_applied", "error_label", "created_at"],
+                        )
+                        st.dataframe(_preview_df, use_container_width=True)
+                    else:
+                        st.info("No rows yet.")
+
+                # Export button
+                st.divider()
+                if st.button("⬇️ Export JSONL", type="primary"):
+                    import tempfile as _tempfile
+                    with _tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as _tmp:
+                        _out = Path(_tmp.name)
+                    _count = _db.export_jsonl(_schema_sel, _run_sel, _out)
+                    with open(_out, "rb") as _fh:
+                        _data = _fh.read()
+                    _out.unlink(missing_ok=True)
+                    st.download_button(
+                        f"⬇️ Download {_count:,} rows as JSONL",
+                        data=_data,
+                        file_name=f"extractions_{_schema_sel}_{_run_sel}.jsonl",
+                        mime="application/jsonl",
+                    )
 
     st.divider()
     st.subheader("Step run history")

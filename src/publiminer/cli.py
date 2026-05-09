@@ -256,6 +256,20 @@ def _create_step(
         step_cfg = load_step_config(step_name, DeduplicateConfig, global_cfg, config_path)
         return DeduplicateStep(global_cfg, step_cfg, output_dir)
 
+    elif step_name == "filter":
+        from publiminer.steps.filter.schema import FilterConfig
+        from publiminer.steps.filter.step import FilterStep
+
+        step_cfg = load_step_config(step_name, FilterConfig, global_cfg, config_path)
+        return FilterStep(global_cfg, step_cfg, output_dir)
+
+    elif step_name == "extract":
+        from publiminer.steps.extract.schema import ExtractConfig
+        from publiminer.steps.extract.step import ExtractStep
+
+        step_cfg = load_step_config(step_name, ExtractConfig, global_cfg, config_path)
+        return ExtractStep(global_cfg, step_cfg, output_dir)
+
     else:
         raise typer.BadParameter(f"Step '{step_name}' is not yet implemented")
 

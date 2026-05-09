@@ -294,15 +294,15 @@ def _extract_abstract(article_elem: ET.Element) -> str:
     return " ".join(parts)
 
 
-def _extract_authors(article_elem: ET.Element) -> list[dict[str, str]]:
-    """Extract author information."""
+def _extract_authors(article_elem: ET.Element) -> list[dict[str, Any]]:
+    """Extract author information including equal-contribution and corresponding flags."""
     authors = []
     author_list = article_elem.find("./AuthorList")
     if author_list is None:
         return authors
 
     for author_elem in author_list.findall("./Author"):
-        author: dict[str, str] = {}
+        author: dict[str, Any] = {}
 
         last_name = author_elem.find("./LastName")
         if last_name is not None and last_name.text:
@@ -318,7 +318,17 @@ def _extract_authors(article_elem: ET.Element) -> list[dict[str, str]]:
 
         affiliation = author_elem.find("./AffiliationInfo/Affiliation")
         if affiliation is not None and affiliation.text:
-            author["affiliation"] = affiliation.text
+            aff_text = affiliation.text
+            # "Electronic address: email@..." is PubMed's corresponding-author marker
+            ea_marker = "Electronic address:"
+            if ea_marker in aff_text:
+                author["is_corresponding"] = True
+                aff_text = aff_text[:aff_text.index(ea_marker)].strip().rstrip(",.")
+            author["affiliation"] = aff_text
+
+        # EqualContribution="Y" marks co-first authors in PubMed XML
+        if author_elem.get("EqualContribution") == "Y":
+            author["equal_contribution"] = True
 
         if "last_name" in author:
             authors.append(author)

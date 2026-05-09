@@ -1,5 +1,6 @@
 general:
   output_dir: output
+  project_name: ""
   log_level: INFO
   seed: 42
   on_error: skip

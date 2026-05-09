@@ -1,0 +1,6 @@
+keywords: []
+min_author_matches: 1
+output_column: "filter_match"
+also_check_columns: []
+case_sensitive: false
+drop_non_matching: false
