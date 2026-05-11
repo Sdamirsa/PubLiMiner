@@ -34,7 +34,7 @@ fetch:
       "CTCA"[Title/Abstract] OR
       "coronary CTA"[Title/Abstract]
     )
-  start_date: "2025/01/01"   # PILOT: last 3 years — change to 2000/01/01 for full run
+  start_date: "2001/01/01"   # PILOT: last 3 years — change to 2000/01/01 for full run
   end_date: "2026/04/30"
   email: ""          # set PUBMED_EMAIL in .env
   api_key: ""        # set NCBI_API_KEY in .env (raises rate limit 3→10 req/s)
@@ -242,6 +242,6 @@ extract:
     pattern_fix: true
     llm_fix: true
     fix_model: ""
-  filter_column: "is_european"   # only extract papers tagged by the filter step
+  filter_column: ""   # extract all papers (is_european tag still present for downstream filtering)
   max_cost_usd: 50.0
   concurrency: 20
